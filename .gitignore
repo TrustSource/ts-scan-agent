@@ -1,0 +1,15 @@
+# Local reference-only material (internal TrustSource docs/architecture) - never publish
+/ts-app/
+/ts-scan/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
