@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-22
+
+### New Features
+    * Detect ecosystems ts-scan has no scanner for yet (PHP/Composer, Ruby/Bundler, Swift, Elixir, Haskell, Perl, Zig, Elm) and draft a GitHub issue proposal per ecosystem, with static facts plus optional LLM-drafted enrichment
+    * `--file-issues` to review (editable in $EDITOR), confirm and file a drafted proposal on `trustsource/ts-scan`, with a best-effort duplicate check first; never fires under `--non-interactive`
+    * `--propose-issues/--no-propose-issues` and `--issue-repo` options
+
 ## [0.1.0] - 2026-08-22
 
 ### New Features

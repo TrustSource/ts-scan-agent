@@ -1,6 +1,7 @@
+import shlex
 import typing as t
 
-from .model import ScanConcept, Candidate, DetectedUnit
+from .model import ScanConcept, Candidate, DetectedUnit, EcosystemProposal
 
 _SECTION_TITLES = {
     'module': 'Modules',
@@ -22,7 +23,39 @@ def _render_candidate(c: Candidate) -> str:
     return '\n'.join(lines)
 
 
-def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit]) -> str:
+def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str) -> str:
+    lines = [f'### {p.ecosystem}']
+    lines.append(f'- Found at: {", ".join(f"`{path}`" for path in p.manifest_paths)}')
+
+    if p.existing_issue:
+        lines.append(
+            f'- ⚠️ A possibly related issue already exists: '
+            f'[#{p.existing_issue.number} {p.existing_issue.title}]({p.existing_issue.url}) '
+            f'({p.existing_issue.state}) - consider commenting there instead of filing a new one.'
+        )
+        return '\n'.join(lines)
+
+    lines.append('- No existing issue found for this ecosystem.')
+    lines.append('')
+    lines.append(f'**Draft title:** {p.title}')
+    lines.append('')
+    lines.append(p.body)
+    lines.append('')
+    body_arg = shlex.quote(p.body)
+    title_arg = shlex.quote(p.title)
+    lines.append(
+        f'File it yourself with:\n'
+        f'  ```bash\n'
+        f'  gh issue create --repo {issue_repo} --title {title_arg} --body {body_arg} '
+        f'--label enhancement\n'
+        f'  ```\n'
+        f'  or re-run with `--file-issues` to be walked through review + filing.'
+    )
+    return '\n'.join(lines)
+
+
+def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
+                     issue_repo: str = 'trustsource/ts-scan') -> str:
     lines = [
         f'# TrustSource Scan Concept: {concept.project_name}',
         '',
@@ -82,5 +115,17 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit]) 
             '(as reflected in the Modules above), never the monorepo root.'
         )
         lines.append('')
+
+    if concept.ecosystem_proposals:
+        lines.append('## Unsupported ecosystems detected')
+        lines.append('')
+        lines.append(
+            'ts-scan has no scanner for these yet. A proposal for each is drafted below - '
+            'review it (nothing is ever filed on GitHub automatically):'
+        )
+        lines.append('')
+        for p in concept.ecosystem_proposals:
+            lines.append(_render_ecosystem_proposal(p, issue_repo))
+            lines.append('')
 
     return '\n'.join(lines)

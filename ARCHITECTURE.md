@@ -37,6 +37,10 @@ repo path
 ┌─────────────┐
 │   Render    │   → Markdown report
 └─────────────┘
+
+(alongside Mapping: any DetectedUnit for an ecosystem ts-scan can't scan yet flows into
+ecosystem_proposals.py, producing an EcosystemProposal per ecosystem - drafted locally always;
+filed on GitHub only via the separate, explicit --file-issues review-and-confirm flow.)
 ```
 
 ## Components
@@ -61,6 +65,14 @@ repo path
   `anthropic.py` optional extra).
 - **`model.py`** — the shared data types (`DetectedUnit`, `Candidate`, `ScanConcept`) that
   every stage above passes to the next. Internal only in v1 (not exposed as a file format yet).
+- **`ecosystem_proposals.py`** — for `DetectedUnit`s of kind `unsupported_ecosystem` (a manifest
+  format from a small known list — `UNSUPPORTED_ECOSYSTEM_MARKERS`/`_EXTENSIONS` in
+  `inventory.py` — that no `ts_scan.pm.*Scanner` accepted for that directory), drafts an
+  `EcosystemProposal`: a static fact baseline (registry/manifest/lockfile, always present) plus
+  optional `LLMClient`-drafted enrichment (suggested approach, closest existing scanner).
+- **`github_issues.py`** — thin `gh` CLI wrapper: read-only duplicate search
+  (`find_similar_issues`) and issue filing (`file_issue`), used only by the CLI's
+  `--file-issues` flow, never automatically.
 
 ## Data flow
 
@@ -170,3 +182,37 @@ involvement in this step yet.
 **Consequences:** Interview only ever asks about things Mapping already anticipated; it can't
 yet ask a clarifying follow-up or handle a case Mapping didn't foresee. Upgrading to an
 LLM-driven dialogue later replaces this module without touching Mapping or Render.
+
+### ADR-006 — Ecosystem-support proposals: draft always, file only on explicit opt-in
+
+**Date:** 2026-08-22
+
+**Context:** When Inventory finds a build system `ts-scan` has no scanner for, the agent can
+draft a GitHub issue proposing support for it on `trustsource/ts-scan` — turning a real gap a
+customer hit into an actionable upstream request. But this tool runs against arbitrary,
+potentially many customers' repos; it must never post to a third-party-maintained public repo
+on someone's behalf without them actively choosing to. User also required (2026-08-22) that the
+customer be able to review and edit the concept before it's sent, not just accept/reject a
+fixed text — drafting alone isn't enough, the flow has to make editing natural.
+
+Also explicitly considered and deferred here: generating the actual scanner *implementation*
+(not just the concept) and opening it as a PR the customer could use pre-merge. Rejected for
+now — needs a much larger coding-tier model and an iterative test-driven loop that the current
+single-shot `LLMClient.judge()` isn't built for, needs matching server-side work (component
+data for the new ecosystem), and raises real legal/compliance-accuracy questions around
+unreviewed generated code feeding SBOM data. Revisit as its own, later feature.
+
+**Decision:** `ecosystem_proposals.py` always drafts a proposal per unsupported ecosystem found
+(local text generation only, cheap) — this ships in the Markdown report by default
+(`--propose-issues`, on by default) with the exact `gh issue create` command to run by hand.
+Actually filing requires `--file-issues` *and*, per proposal: a best-effort duplicate check
+(`github_issues.find_similar_issues`, skipped with a warning if a match is found), the drafted
+text opened in the user's `$EDITOR` for review/editing (`click.edit`), and an explicit
+`click.confirm` on the (possibly edited) result. `--file-issues` is a no-op (warns, doesn't
+silently degrade to non-interactive-confirm-skipped) under `--non-interactive` — this
+confirmation step cannot be bypassed by combining flags.
+
+**Consequences:** Filing is meaningfully more friction than a single flag, by design. Dedup
+relies on the `gh` CLI being installed/authenticated for the best safety net, but degrades to
+"draft only, no dedup check" rather than blocking drafting when it isn't — consistent with
+ADR-001/ADR-002's "always at least a usable local baseline" posture.

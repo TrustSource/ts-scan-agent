@@ -24,6 +24,25 @@ MONOREPO_MARKER_FILES = {
     'pnpm-workspace.yaml', 'lerna.json', 'nx.json', 'rush.json',
 }
 
+# Ecosystems ts-scan has no dependency-tree scanner for. Deliberately excludes anything
+# ts-scan already covers - including C/C++, which is handled via DeepScan integration even
+# though it has no ts_scan.pm.Scanner subclass, so no C/C++ build files belong in this list.
+# This is a starting set, not exhaustive - extend as gaps are found; see ARCHITECTURE.md.
+UNSUPPORTED_ECOSYSTEM_MARKERS = {
+    'composer.json': 'PHP (Composer)',
+    'Gemfile': 'Ruby (Bundler)',
+    'Package.swift': 'Swift (Swift Package Manager)',
+    'mix.exs': 'Elixir (Hex)',
+    'stack.yaml': 'Haskell (Stack)',
+    'cpanfile': 'Perl (CPAN)',
+    'build.zig': 'Zig',
+    'elm.json': 'Elm',
+}
+
+UNSUPPORTED_ECOSYSTEM_EXTENSIONS = {
+    '.cabal': 'Haskell (Cabal)',
+}
+
 
 def _pm_scanner_classes() -> t.List[type]:
     """The ecosystem detectors we reuse from ts-scan, rather than re-implementing manifest
@@ -82,14 +101,30 @@ def scan_inventory(root: Path, max_depth: int = MAX_DEPTH) -> t.List[DetectedUni
             dirnames[:] = []
             continue
 
+        known_ecosystem_found = False
         for scanner in scanners:
             if scanner.accepts(current):
+                known_ecosystem_found = True
                 units.append(DetectedUnit(
                     path=str(current.relative_to(root)) or '.',
                     kind='ecosystem',
                     ecosystem=scanner.name(),
                     evidence=f'{scanner.name()} manifest found',
                 ))
+
+        if not known_ecosystem_found:
+            for filename in filenames:
+                display_name = (
+                    UNSUPPORTED_ECOSYSTEM_MARKERS.get(filename)
+                    or UNSUPPORTED_ECOSYSTEM_EXTENSIONS.get(Path(filename).suffix)
+                )
+                if display_name:
+                    units.append(DetectedUnit(
+                        path=str(current.relative_to(root)) or '.',
+                        kind='unsupported_ecosystem',
+                        ecosystem=display_name,
+                        evidence=f'{filename} found, no ts-scan scanner for {display_name}',
+                    ))
 
         for filename in filenames:
             if filename in DOCKERFILE_NAMES or filename.startswith('Dockerfile.'):

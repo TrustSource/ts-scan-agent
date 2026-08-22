@@ -31,6 +31,19 @@ ts-scan-agent analyze . --llm anthropic --anthropic-api-key sk-...
 ts-scan-agent analyze . --non-interactive -o scan-concept.md
 ```
 
+## Unsupported ecosystems
+
+If your repo uses a build system `ts-scan` can't scan yet (PHP/Composer, Ruby, Swift, Elixir,
+Haskell, Perl, Zig, Elm today), the report includes a drafted GitHub issue proposing support for
+it on [`trustsource/ts-scan`](https://github.com/trustsource/ts-scan) — nothing is ever filed
+automatically. Review it, then either run the `gh issue create` command printed in the report
+yourself, or:
+
+```bash
+# Checks for likely duplicates, lets you edit the draft in $EDITOR, then asks to confirm before filing
+ts-scan-agent analyze . --file-issues
+```
+
 ## How it works
 
 1. **Inventory** — walks the repo (reusing [`ts-scan`](https://github.com/trustsource/ts-scan)'s
