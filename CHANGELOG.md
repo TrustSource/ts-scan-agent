@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-08-22
+
+### Fixes
+    * Anthropic backend: default model was a stale `claude-opus-4-7` - now `claude-opus-5`
+    * Anthropic backend: switched from a forced-tool-call workaround to native `output_config.format` (json_schema) structured output, per the current API
+    * Anthropic backend: `judge()` now degrades to `{}` on any API error (auth, rate limit, connection) instead of crashing the whole `analyze` run, matching the Ollama/Null backends' contract
+    * Added `additionalProperties: false` to the judge() schemas (Dockerfile classification, ecosystem enrichment), required for strict `json_schema` structured output
+
 ## [0.2.0] - 2026-08-22
 
 ### New Features

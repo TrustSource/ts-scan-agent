@@ -14,6 +14,7 @@ DOCKERFILE_JUDGE_SCHEMA = {
         'rationale': {'type': 'string'},
     },
     'required': ['candidate_type', 'confidence', 'rationale'],
+    'additionalProperties': False,
 }
 
 

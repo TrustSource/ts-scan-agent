@@ -45,6 +45,7 @@ ENRICHMENT_SCHEMA = {
         'similar_scanner': {'type': 'string'},
     },
     'required': ['suggested_approach', 'similar_scanner'],
+    'additionalProperties': False,
 }
 
 DISCLOSURE_NOTE = (
