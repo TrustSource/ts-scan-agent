@@ -1,10 +1,33 @@
 import json
+import re
 import typing as t
 
 from pathlib import Path, PurePosixPath
 
 from .model import DetectedUnit, Candidate
 from .llm import LLMClient, NullLLMClient
+
+# A Module/Infrastructure Module name must stay stable across releases. TrustSource keys a
+# module by name: renaming it (e.g. because a version or image tag was baked into the name)
+# creates a brand-new module and silently loses everything attached to the old one - whitelist
+# decisions, muted vulnerabilities, approval history. Catches the common patterns without
+# flagging ordinary names that merely contain a digit (e.g. "log4j2", "oauth2-proxy").
+_DOCKER_TAG_VERSION_RE = re.compile(r':v?\d+(\.\d+)*([-_][a-zA-Z0-9.]+)?$')
+_DOTTED_VERSION_RE = re.compile(r'(?:^|[-_ ])v?\d+\.\d+(?:\.\d+)?(?:$|[-_ ])')
+_BARE_V_SUFFIX_RE = re.compile(r'[-_]v\d+$')
+
+
+def _naming_warnings(name: str) -> t.List[str]:
+    if (_DOCKER_TAG_VERSION_RE.search(name) or _DOTTED_VERSION_RE.search(name)
+            or _BARE_V_SUFFIX_RE.search(name)):
+        return [
+            f'"{name}" looks like it embeds a version or image tag. Keep TrustSource module '
+            'names stable across releases (e.g. "api-runtime", not "api-1.4.2" or '
+            '"node-22-alpine") - a version bump would otherwise create a brand-new module and '
+            'silently lose everything attached to the old one, including muted vulnerabilities '
+            'and approval history.'
+        ]
+    return []
 
 DOCKERFILE_JUDGE_SCHEMA = {
     'type': 'object',
@@ -165,5 +188,8 @@ def build_candidates(project_name: str, root: Path, units: t.List[DetectedUnit],
                     'it should be a Module or an Infrastructure Module.'
                 ),
             ))
+
+    for candidate in candidates:
+        candidate.warnings = _naming_warnings(candidate.name)
 
     return candidates

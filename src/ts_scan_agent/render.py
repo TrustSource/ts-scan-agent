@@ -18,6 +18,8 @@ def _render_candidate(c: Candidate) -> str:
     lines.append(f'- Rationale: {c.rationale}')
     lines.append('- Recommended command:')
     lines.append(f'  ```bash\n  {c.ts_scan_command}\n  ```')
+    for warning in c.warnings:
+        lines.append(f'- ⚠️ **Naming:** {warning}')
     if c.open_question:
         lines.append(f'- ⚠️ **Open question:** {c.open_question}')
     return '\n'.join(lines)
@@ -63,6 +65,14 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
         '',
         f'Create one TrustSource project (`{concept.project_name}`) and add the following '
         'units to it:',
+        '',
+        '> **Naming tip:** keep Module/Infrastructure Module names stable across releases - '
+        'never bake a version number or image tag into the name itself (e.g. `api-runtime`, '
+        'not `api-1.4.2` or `node-22-alpine`, even though those tags are exactly what you\'d '
+        'pass to `ts-scan docker`). TrustSource keys a module by name: a name that changes '
+        'with every release creates a brand-new module each time, silently losing everything '
+        'attached to the old one - whitelist decisions, muted vulnerabilities, approval '
+        'history.',
         '',
     ]
 

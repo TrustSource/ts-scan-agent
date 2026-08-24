@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-22
+
+### New Features
+    * Always-shown naming-tip note in the report: never bake a version/image tag into a Module or Infrastructure Module name - it creates a brand-new module per release and loses whitelist decisions, muted vulnerabilities and approval history attached to the old one
+    * `Candidate.warnings`: every candidate name we generate is checked against version-like patterns (`api-1.4.2`, `node:22-alpine`, `api-v2`) and flagged non-blockingly if it matches
+
 ## [0.2.1] - 2026-08-22
 
 ### Fixes

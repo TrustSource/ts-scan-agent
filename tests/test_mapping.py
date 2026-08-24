@@ -3,8 +3,10 @@ import typing as t
 
 from pathlib import Path
 
+import pytest
+
 from ts_scan_agent.model import DetectedUnit
-from ts_scan_agent.mapping import build_candidates
+from ts_scan_agent.mapping import build_candidates, _naming_warnings
 from ts_scan_agent.llm import LLMClient
 
 
@@ -86,3 +88,43 @@ def test_dockerfile_defaults_to_infra_module_with_open_question_when_no_llm(tmp_
     assert len(candidates) == 1
     assert candidates[0].candidate_type == 'infrastructure_module'
     assert candidates[0].open_question is not None
+
+
+@pytest.mark.parametrize('name', [
+    'myapp:1.4.2',
+    'node:22-alpine',
+    'myapp-1.4.2',
+    'api-v2',
+    'api_v3',
+])
+def test_naming_warnings_flags_version_like_names(name):
+    assert _naming_warnings(name) != []
+
+
+@pytest.mark.parametrize('name', [
+    'api-runtime',
+    'log4j2',
+    'oauth2-proxy',
+    'my-service',
+    'ts-scan-agent',
+])
+def test_naming_warnings_does_not_flag_stable_names(name):
+    assert _naming_warnings(name) == []
+
+
+def test_build_candidates_root_module_named_after_project_gets_no_naming_warning(tmp_path: Path):
+    # project_name is used as the module name for a root-level candidate - guard against a
+    # false positive there specifically, since it's the most common case.
+    units = [DetectedUnit(path='.', kind='ecosystem', ecosystem='Node', evidence='found')]
+
+    candidates = build_candidates('my-app', tmp_path, units)
+
+    assert candidates[0].warnings == []
+
+
+def test_build_candidates_flags_a_versioned_project_name(tmp_path: Path):
+    units = [DetectedUnit(path='.', kind='ecosystem', ecosystem='Node', evidence='found')]
+
+    candidates = build_candidates('my-app-2.0', tmp_path, units)
+
+    assert candidates[0].warnings != []

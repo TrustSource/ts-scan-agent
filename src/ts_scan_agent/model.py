@@ -25,6 +25,7 @@ class Candidate(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
     open_question: t.Optional[str] = None
+    warnings: t.List[str] = Field(default_factory=list)
 
 
 class ExistingIssueRef(BaseModel):

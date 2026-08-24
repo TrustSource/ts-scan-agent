@@ -56,7 +56,13 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
   isn't `private` is a Linked Module candidate. A Dockerfile is classified Module vs.
   Infrastructure Module via an `LLMClient` call when one is configured, defaulting to
   Infrastructure Module (per TrustSource's own container-scanning guidance) with an open
-  question when it isn't.
+  question when it isn't. Every candidate name is also checked against `_naming_warnings()`
+  for version-like patterns (`api-1.4.2`, `node:22-alpine`, `api-v2`) and gets a non-blocking
+  `Candidate.warnings` entry if it matches - a module name that changes with every release
+  creates a brand-new TrustSource module per release, silently losing everything attached to
+  the old one (whitelist decisions, muted vulnerabilities, approval history). This only catches
+  names *we* generate; `render.py` also prints a fixed reminder up front, since the actual risk
+  is usually a human-chosen `--module` value for `ts-scan docker` that we can't inspect.
 - **`interview.py`** — walks the `Candidate`s with an unresolved `open_question` and asks a
   fixed CLI question per item.
 - **`render.py`** — turns the finished `ScanConcept` (plus the raw `DetectedUnit` list, for the

@@ -39,3 +39,29 @@ def test_render_lists_detected_ci_and_monorepo_markers():
     assert '## Detected CI/CD configuration' in report
     assert '.github/workflows/ci.yml' in report
     assert '## Monorepo markers detected' in report
+
+
+def test_render_always_shows_the_naming_tip():
+    concept = ScanConcept(project_name='demo', source_path='/tmp/demo', candidates=[])
+
+    report = render_markdown(concept, detected_units=[])
+
+    assert 'Naming tip' in report
+    assert 'muted vulnerabilities' in report
+
+
+def test_render_shows_per_candidate_naming_warning():
+    concept = ScanConcept(
+        project_name='demo',
+        source_path='/tmp/demo',
+        candidates=[
+            Candidate(name='api-1.4.2', path='.', candidate_type='module',
+                      ts_scan_command='ts-scan scan .', confidence=0.95,
+                      rationale='root package', warnings=['"api-1.4.2" looks versioned.']),
+        ],
+    )
+
+    report = render_markdown(concept, detected_units=[])
+
+    assert '⚠️ **Naming:**' in report
+    assert '"api-1.4.2" looks versioned.' in report
