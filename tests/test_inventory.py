@@ -47,3 +47,32 @@ def test_ignores_node_modules(tmp_path: Path):
     ecosystem_paths = {u.path for u in units if u.kind == 'ecosystem'}
 
     assert not any('node_modules' in p for p in ecosystem_paths)
+
+
+def test_honors_root_gitignore_for_directories(tmp_path: Path):
+    _write(tmp_path / '.gitignore', 'generated/\n')
+    _write(tmp_path / 'package.json', '{}')
+    _write(tmp_path / 'generated/composer.json', '{}')  # would otherwise be an unsupported-ecosystem hit
+
+    units = scan_inventory(tmp_path)
+
+    assert not any(u.path.startswith('generated') for u in units)
+
+
+def test_honors_root_gitignore_for_individual_files(tmp_path: Path):
+    _write(tmp_path / '.gitignore', 'Dockerfile.bak\n')
+    _write(tmp_path / 'Dockerfile', 'FROM alpine\n')
+    _write(tmp_path / 'Dockerfile.bak', 'FROM alpine\n')
+
+    units = scan_inventory(tmp_path)
+    dockerfile_paths = {u.path for u in units if u.kind == 'dockerfile'}
+
+    assert dockerfile_paths == {'Dockerfile'}
+
+
+def test_works_without_a_gitignore_present(tmp_path: Path):
+    _write(tmp_path / 'package.json', '{}')
+
+    units = scan_inventory(tmp_path)
+
+    assert any(u.kind == 'ecosystem' for u in units)

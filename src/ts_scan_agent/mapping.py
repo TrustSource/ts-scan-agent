@@ -48,10 +48,24 @@ def _module_name(path: str, project_name: str) -> str:
 
 
 def _scan_command(path: str, name: str, project_name: str) -> str:
+    """`ts-scan upload` has no --module flag - TrustSource auto-derives the module name from
+    the scanned artifact itself (see docs/v2.16/recipes/01-first-module-to-sbom.md). `name`
+    here is only the local output filename, not something ts-scan is told to use as the module
+    name - that's exactly the naming risk render.py's naming-tip covers. Flags verified against
+    the real ts-scan CLI (ts_scan_reference.py), not hand-guessed - see ARCHITECTURE.md ADR-007."""
     target = '.' if path in ('.', '') else path
     return (
         f'ts-scan scan {target} -o {name}.json && '
-        f'ts-scan upload --project "{project_name}" --module "{name}" {name}.json'
+        f'ts-scan upload --project-name "{project_name}" --api-key "$TS_API_KEY" {name}.json'
+    )
+
+
+def _docker_scan_command(name: str, project_name: str) -> str:
+    """There is no `ts-scan docker` subcommand - container scanning is `ts-scan scan
+    --use-syft docker:<image>` (see ts_scan_reference.py / ARCHITECTURE.md ADR-007)."""
+    return (
+        f'ts-scan scan --use-syft docker:<image> -o {name}.json && '
+        f'ts-scan upload --project-name "{project_name}" --api-key "$TS_API_KEY" {name}.json'
     )
 
 
@@ -154,7 +168,7 @@ def build_candidates(project_name: str, root: Path, units: t.List[DetectedUnit],
     for unit in dockerfile_units:
         dir_path = str(PurePosixPath(unit.path).parent)
         name = f'{_module_name(dir_path, project_name)}-container'
-        command = f'ts-scan docker <image> --project "{project_name}" --module "{name}"'
+        command = _docker_scan_command(name, project_name)
 
         judged = llm.judge(
             prompt=(

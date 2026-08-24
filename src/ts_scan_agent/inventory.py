@@ -3,6 +3,8 @@ import typing as t
 
 from pathlib import Path
 
+import pathspec
+
 from .model import DetectedUnit
 
 IGNORED_DIRS = {
@@ -72,6 +74,23 @@ def _instantiate_scanner(cls: type):
     return cls()
 
 
+def _load_gitignore_spec(root: Path) -> t.Optional[pathspec.PathSpec]:
+    """Only the root `.gitignore` is honored - not nested per-directory ones, and not
+    ecosystem-equivalents like `.dockerignore`/`.npmignore` (different semantics: build-context
+    and publish exclusion, not "not part of the source"). This is the common case for most
+    repos; a known limitation, see ARCHITECTURE.md."""
+    gitignore = root / '.gitignore'
+    if not gitignore.is_file():
+        return None
+
+    try:
+        lines = gitignore.read_text(errors='ignore').splitlines()
+    except OSError:
+        return None
+
+    return pathspec.PathSpec.from_lines('gitwildmatch', lines)
+
+
 def _has_npm_workspaces(package_json: Path) -> bool:
     import json
 
@@ -85,10 +104,14 @@ def _has_npm_workspaces(package_json: Path) -> bool:
 
 def scan_inventory(root: Path, max_depth: int = MAX_DEPTH) -> t.List[DetectedUnit]:
     """Deterministic, LLM-free repo walk: finds ecosystem manifests (via ts-scan's own
-    detectors), Dockerfiles, CI configs and monorepo markers."""
+    detectors), Dockerfiles, CI configs and monorepo markers. Honors the repo's root
+    `.gitignore`, if present - directories it excludes are never descended into, and files it
+    excludes are never treated as evidence, so generated/vendored/ignored content doesn't
+    produce false candidates or false "unsupported ecosystem" proposals."""
 
     root = root.resolve()
     scanners = [_instantiate_scanner(cls) for cls in _pm_scanner_classes()]
+    gitignore_spec = _load_gitignore_spec(root)
     units: t.List[DetectedUnit] = []
 
     for dirpath, dirnames, filenames in os.walk(root):
@@ -96,6 +119,16 @@ def scan_inventory(root: Path, max_depth: int = MAX_DEPTH) -> t.List[DetectedUni
         depth = len(current.relative_to(root).parts)
 
         dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS]
+
+        if gitignore_spec is not None:
+            dirnames[:] = [
+                d for d in dirnames
+                if not gitignore_spec.match_file(str((current / d).relative_to(root)) + '/')
+            ]
+            filenames = [
+                f for f in filenames
+                if not gitignore_spec.match_file(str((current / f).relative_to(root)))
+            ]
 
         if depth > max_depth:
             dirnames[:] = []

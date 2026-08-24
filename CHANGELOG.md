@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-22
+
+### New Features
+    * `ts_scan_reference.py`: introspects the real `ts-scan` Click command tree as ground truth; `tests/test_ts_scan_reference.py` validates every generated `ts_scan_command` against it, so a future `ts-scan` flag rename/removal fails the test suite instead of shipping a wrong command
+    * Inventory now honors the repo's root `.gitignore` (via `pathspec`) - ignored directories are never descended into and ignored files never become detected units
+
+### Fixes
+    * **Generated `ts-scan upload` commands referenced a `--module` flag that does not exist**, and used `--project` instead of the real `--project-name` - TrustSource actually auto-derives the module name from the scanned artifact; commands and the naming-tip text corrected accordingly
+    * **`ts-scan docker <image>` was not a real subcommand** - container/image scanning is `ts-scan scan --use-syft docker:<image>`; the Infrastructure Module command template was rewritten to match
+    * Added the previously-missing required `--api-key` to every generated `upload` command
+
 ## [0.3.0] - 2026-08-22
 
 ### New Features

@@ -48,7 +48,11 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
 - **`inventory.py`** — deterministic repo walker. Reuses `ts_scan.pm.*Scanner.accepts()` for
   ecosystem detection instead of re-implementing manifest parsing; adds its own detection for
   Dockerfiles, CI config files and monorepo markers (`pnpm-workspace.yaml`, `lerna.json`, an
-  npm `workspaces` field, etc). Produces `DetectedUnit` objects. Never touches an LLM.
+  npm `workspaces` field, etc). Produces `DetectedUnit` objects. Never touches an LLM. Honors
+  the repo's root `.gitignore` (via `pathspec`) - ignored directories are never descended into
+  and ignored files never become `DetectedUnit`s, so vendored/generated/ignored content can't
+  produce a false Module or a false "unsupported ecosystem" proposal. Scope is deliberately
+  limited - see Known Limitations below.
 - **`mapping.py`** — rule engine turning `DetectedUnit`s into `Candidate`s. A detected
   ecosystem at the repo root, or nested under a monorepo marker, is a high-confidence Module.
   A nested ecosystem manifest with no monorepo marker is ambiguous (own module, or just a
@@ -61,8 +65,13 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
   `Candidate.warnings` entry if it matches - a module name that changes with every release
   creates a brand-new TrustSource module per release, silently losing everything attached to
   the old one (whitelist decisions, muted vulnerabilities, approval history). This only catches
-  names *we* generate; `render.py` also prints a fixed reminder up front, since the actual risk
-  is usually a human-chosen `--module` value for `ts-scan docker` that we can't inspect.
+  names *we* generate; `render.py` also prints a fixed reminder up front, since neither
+  `ts-scan scan` nor `upload` has a flag to set the module name at all — TrustSource
+  auto-derives it from the scanned artifact (see ADR-007 below), so the actual risk is
+  whatever ts-scan itself infers, most commonly a container image tag on a Syft-based scan.
+- **`ts_scan_reference.py`** — introspects the real `ts-scan` Click command tree (never
+  hand-transcribed) as ground truth for every `ts_scan_command` string this project generates
+  or shows an LLM; see ADR-007.
 - **`interview.py`** — walks the `Candidate`s with an unresolved `open_question` and asks a
   fixed CLI question per item.
 - **`render.py`** — turns the finished `ScanConcept` (plus the raw `DetectedUnit` list, for the
@@ -223,17 +232,63 @@ relies on the `gh` CLI being installed/authenticated for the best safety net, bu
 "draft only, no dedup check" rather than blocking drafting when it isn't — consistent with
 ADR-001/ADR-002's "always at least a usable local baseline" posture.
 
+### ADR-007 — `ts_scan_command` text must come from introspected ground truth, never invented
+
+**Date:** 2026-08-22
+
+**Context:** This tool's entire value proposition is telling customers which command to run.
+A wrong command is worse than no command — it burns trust immediately ("sonst kriegen die
+Kunden die Krise", per the user). This was not a hypothetical risk: while implementing this
+ADR, introspecting the real `ts-scan` Click command tree (`ts_scan_reference.py`) revealed that
+the command templates shipped up to this point were themselves wrong — `ts-scan upload` has no
+`--module` flag (module name is auto-derived, see the Known Limitations entry above),
+`--project` should have been `--project-name`, and `ts-scan docker` doesn't exist as a
+subcommand at all (it's `ts-scan scan --use-syft docker:<image>`). These had been hand-typed
+from a mix of memory and a ts-docs recipe page, neither of which is authoritative for the
+actual installed CLI.
+
+**Decision:** `ts_scan_reference.py` introspects the real Click command tree from the installed
+`ts-scan` package (`cli.commands`, each command's `.params`) as the only source of truth for
+flags/arguments. `mapping.py`'s `_scan_command()`/`_docker_scan_command()` are the *only* two
+places that build `ts_scan_command` strings, and both are plain deterministic string templates
+— no LLM is ever in this path (consistent with ADR-001: LLMClient is only consulted for
+Module-vs-Infrastructure-Module *classification*, never for command text). `tests/
+test_ts_scan_reference.py` extracts every flag token from both templates' output
+(`extract_flags()`) and asserts each one is a real flag on the real command, sourced from the
+same introspection — so a future `ts-scan` release that renames/removes a flag fails this
+project's test suite immediately instead of silently shipping a wrong command to customers.
+
+**Consequences:** Command text is exactly as current as the pinned `ts-scan` dependency version
+— bump `ts-scan` in `pyproject.toml` and the reference (and the validation test) automatically
+reflect the new CLI surface; a flag removed upstream breaks the test loudly rather than shipping
+stale advice. `ecosystem_proposals.py`'s LLM-drafted "suggested approach" text is prose about a
+*hypothetical future* scanner for an ecosystem ts-scan doesn't support yet — it never claims to
+give a runnable command for an existing one, so it's out of scope for this guarantee, but stays
+worth re-checking if that changes.
+
 ---
 
 ## Known limitations & pending upstream work
 
 - **Module name pinning (blocked on upstream tickets, not yet shipped as of 2026-08-22):** the
-  naming-tip/`Candidate.warnings` mechanism (v0.3.0) is a stopgap. The real fix is a stable,
-  pinnable module identifier decoupled from the human-readable display name — so a name that
-  legitimately changes (e.g. one derived from a Syft-detected image/package name) doesn't
-  create a new module. `ts-scan import` already has this (`--module-id`, alongside `--module`,
-  see `docs/usage.md:228`); `ts-scan scan`/`upload`/`docker` — the commands this tool actually
-  recommends — do not. The user has filed tickets to extend pinning to those paths.
-  **Once that ships:** update `_scan_command()`/the Dockerfile command template in `mapping.py`
+  naming-tip/`Candidate.warnings` mechanism (v0.3.0) is a stopgap. Verified against the real CLI
+  (introspected via `ts_scan_reference.py`, ADR-007): **neither `ts-scan scan` nor `upload` has
+  a `--module` flag at all** — TrustSource auto-derives the module name entirely from the
+  scanned artifact (package name, or the image reference incl. tag for a Syft/container scan).
+  `ts-scan import` is the one exception - it already takes a pinned, decoupled identifier
+  (`--module` *and* `--module-id`, both required). The user has filed tickets to bring
+  equivalent pinning to `scan`/`upload` — the commands this tool actually recommends.
+  **Once that ships:** update `_scan_command()`/`_docker_scan_command()` in `mapping.py`
   to emit a pinned `--module-id` alongside `--module`, and adjust the naming-tip text in
   `render.py` to recommend pinning as the actual fix rather than just "pick a stable name."
+
+- **`.gitignore` support is intentionally narrow (v0.4.0):** only the **root** `.gitignore` is
+  read — nested per-directory `.gitignore` files are not merged in, and ecosystem-equivalent
+  ignore files (`.dockerignore`, `.npmignore`, …) aren't honored at all (different semantics:
+  build-context/publish exclusion, not "not part of the source"). It also only gates *our own*
+  detection (Dockerfiles, CI configs, monorepo markers, unsupported-ecosystem markers) plus
+  directory descent — it does **not** reach into `ts_scan.pm.*Scanner.accepts()`, so a manifest
+  file that's individually gitignored (rare) inside a *non*-ignored directory can still trigger
+  a Module candidate, since `accepts()` re-checks the filesystem directly rather than going
+  through our filtered `filenames` list. Extend `inventory.py`'s `_load_gitignore_spec()` to a
+  proper per-directory cascade if nested-gitignore repos turn out to matter in practice.

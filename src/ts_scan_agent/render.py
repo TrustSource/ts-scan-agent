@@ -66,13 +66,15 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
         f'Create one TrustSource project (`{concept.project_name}`) and add the following '
         'units to it:',
         '',
-        '> **Naming tip:** keep Module/Infrastructure Module names stable across releases - '
-        'never bake a version number or image tag into the name itself (e.g. `api-runtime`, '
-        'not `api-1.4.2` or `node-22-alpine`, even though those tags are exactly what you\'d '
-        'pass to `ts-scan docker`). TrustSource keys a module by name: a name that changes '
-        'with every release creates a brand-new module each time, silently losing everything '
-        'attached to the old one - whitelist decisions, muted vulnerabilities, approval '
-        'history.',
+        '> **Naming tip:** `ts-scan scan`/`upload` have no flag to set the module name - '
+        'TrustSource auto-derives it from what ts-scan detects (the package name, or for a '
+        'container scan, the image reference *including its tag*, e.g. `node:22-alpine`). '
+        'Check the module name TrustSource assigns after the first scan and rename it if it '
+        'looks version-y **before** the next release: TrustSource keys a module by name, so a '
+        'name that changes with every release creates a brand-new module each time, silently '
+        'losing everything attached to the old one - whitelist decisions, muted '
+        'vulnerabilities, approval history. (A pinnable module ID for `scan`/`upload` is '
+        'planned upstream - see ARCHITECTURE.md.)',
         '',
     ]
 
