@@ -222,3 +222,18 @@ confirmation step cannot be bypassed by combining flags.
 relies on the `gh` CLI being installed/authenticated for the best safety net, but degrades to
 "draft only, no dedup check" rather than blocking drafting when it isn't — consistent with
 ADR-001/ADR-002's "always at least a usable local baseline" posture.
+
+---
+
+## Known limitations & pending upstream work
+
+- **Module name pinning (blocked on upstream tickets, not yet shipped as of 2026-08-22):** the
+  naming-tip/`Candidate.warnings` mechanism (v0.3.0) is a stopgap. The real fix is a stable,
+  pinnable module identifier decoupled from the human-readable display name — so a name that
+  legitimately changes (e.g. one derived from a Syft-detected image/package name) doesn't
+  create a new module. `ts-scan import` already has this (`--module-id`, alongside `--module`,
+  see `docs/usage.md:228`); `ts-scan scan`/`upload`/`docker` — the commands this tool actually
+  recommends — do not. The user has filed tickets to extend pinning to those paths.
+  **Once that ships:** update `_scan_command()`/the Dockerfile command template in `mapping.py`
+  to emit a pinned `--module-id` alongside `--module`, and adjust the naming-tip text in
+  `render.py` to recommend pinning as the actual fix rather than just "pick a stable name."
