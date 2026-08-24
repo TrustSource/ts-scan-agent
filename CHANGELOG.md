@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-22
+
+### Fixed
+    * README instructions said `pip install ts-scan-agent` - the package is **not yet published to PyPI**, so that command fails. Replaced with `pip install git+https://github.com/TrustSource/ts-scan-agent.git` (and the `[anthropic]`-extra equivalent), both verified against a real fresh install
+
+### Documentation
+    * Rewrote README.md: explains the four pipeline steps and what each does/doesn't call an LLM for, a table of supported LLM backends with their actual default models, the unsupported-ecosystem GitHub issue flow, and a full CLI flag reference
+
 ## [0.4.0] - 2026-08-22
 
 ### New Features
