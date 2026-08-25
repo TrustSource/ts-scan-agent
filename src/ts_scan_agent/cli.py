@@ -14,14 +14,28 @@ from .model import ScanConcept, ExistingIssueRef
 from .llm import LLMClient, NullLLMClient
 from .ecosystem_proposals import build_proposals
 from .github_issues import find_similar_issues, file_issue, GitHubIssueError
+from .settings import load_settings, USER_CONFIG_PATH
 
 
-@click.group()
+@click.group(context_settings={'auto_envvar_prefix': 'TS_SCAN_AGENT'})
 @click.version_option(version=__version__, prog_name='ts-scan-agent')
-def start():
+@click.option('--config', 'config_path', default=USER_CONFIG_PATH, show_default=True,
+              type=click.Path(path_type=Path, dir_okay=False),
+              help='User-level settings file (TOML), keyed by the option names shown below '
+                   '(e.g. `level = "expert"`). A .ts-scan-agent.toml in the current directory, '
+                   'if present, overrides it - commit one to a repo to pin shared team/CI '
+                   'defaults. Every value here can still be overridden by a '
+                   'TS_SCAN_AGENT_<NAME> environment variable or the matching CLI flag.')
+@click.pass_context
+def start(ctx: click.Context, config_path: Path):
     """Proposes a TrustSource scan concept for a repository: which parts should become
     TrustSource Modules, Infrastructure Modules or Linked Modules, and which ts-scan command
     to run for each."""
+    settings = load_settings(config_path, project_dir=Path.cwd())
+    ctx.default_map = settings
+    group = t.cast(click.Group, ctx.command)
+    for sub in group.commands.values():
+        sub.context_settings['default_map'] = settings
 
 
 def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
@@ -46,15 +60,16 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
 
 @start.command('analyze', help='Analyze a repository and propose a TrustSource scan concept')
 @click.argument('path', type=click.Path(exists=True, file_okay=False, path_type=Path))
-@click.option('--level', type=click.Choice(LEVEL_CHOICES), default='intermediate', show_default=True,
+@click.option('--level', type=click.Choice(LEVEL_CHOICES), default='beginner', show_default=True,
               help='How much explanation the report includes. beginner: step-by-step '
                    'TrustSource onboarding plus a concepts glossary, in addition to everything '
-                   'intermediate has. intermediate: structure, commands, rationale and hints '
-                   '(default). expert: structure and commands only, no prose.')
-@click.option('--project', 'project_name', required=False,
+                   'intermediate has (default - if you already know TrustSource, set this once '
+                   'in a settings file or pass --level intermediate/expert). intermediate: '
+                   'structure, commands, rationale and hints. expert: structure and commands '
+                   'only, no prose.')
+@click.option('--project', required=False,
               help='TrustSource project name to propose (defaults to the directory name)')
-@click.option('--llm', 'llm_backend', type=click.Choice(['none', 'ollama', 'anthropic']),
-              default='ollama',
+@click.option('--llm', type=click.Choice(['none', 'ollama', 'anthropic']), default='ollama',
               help='LLM backend for ambiguous judgment calls. "none" runs fully offline/'
                    'rule-based and defers everything ambiguous to the interview.')
 @click.option('--llm-model', required=False, help='Override the default model for the chosen backend')
@@ -74,28 +89,28 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
                    'review/edit it in $EDITOR and then confirm before filing it on GitHub. '
                    'Ignored (with a warning) under --non-interactive - filing always requires '
                    'an interactive confirmation.')
-@click.option('-o', '--output', 'output_path', type=click.Path(path_type=Path), required=False,
+@click.option('-o', '--output', required=False, type=click.Path(path_type=Path),
               help='Write the Markdown report here instead of printing it')
-def analyze(path: Path, level: Level, project_name: t.Optional[str], llm_backend: str,
+def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
             llm_model: t.Optional[str], ollama_url: str,
             anthropic_api_key: t.Optional[str], non_interactive: bool,
             propose_issues: bool, issue_repo: str, file_issues: bool,
-            output_path: t.Optional[Path]):
+            output: t.Optional[Path]):
     root = path.resolve()
-    project_name = project_name or root.name
+    project_name = project or root.name
 
-    llm = _build_llm_client(llm_backend, llm_model, ollama_url, anthropic_api_key)
+    llm_client = _build_llm_client(llm, llm_model, ollama_url, anthropic_api_key)
 
     click.echo(f'Scanning {root} ...', err=True)
     units = scan_inventory(root)
 
-    candidates = build_candidates(project_name, root, units, llm=llm)
+    candidates = build_candidates(project_name, root, units, llm=llm_client)
     concept = ScanConcept(project_name=project_name, source_path=str(root), candidates=candidates)
 
     run_interview(concept, non_interactive=non_interactive)
 
     if propose_issues:
-        concept.ecosystem_proposals = build_proposals(units, llm=llm)
+        concept.ecosystem_proposals = build_proposals(units, llm=llm_client)
         for proposal in concept.ecosystem_proposals:
             results = find_similar_issues(issue_repo, proposal.ecosystem)
             if results:
@@ -113,9 +128,9 @@ def analyze(path: Path, level: Level, project_name: t.Optional[str], llm_backend
 
     report = render_markdown(concept, units, issue_repo=issue_repo, level=level)
 
-    if output_path:
-        output_path.write_text(report)
-        click.echo(f'Wrote scan concept to {output_path}', err=True)
+    if output:
+        output.write_text(report)
+        click.echo(f'Wrote scan concept to {output}', err=True)
     else:
         click.echo(report)
 

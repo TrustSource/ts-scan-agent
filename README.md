@@ -93,7 +93,7 @@ Requires Python ≥ 3.10. `ts-scan` itself comes along as a dependency automatic
 ## Quickstart
 
 ```bash
-# Default: local Ollama, interactive interview, prints the report
+# Default: local Ollama, interactive interview, beginner-level report, prints to stdout
 ts-scan-agent analyze /path/to/your/repo
 
 # Fully offline, no LLM at all, write straight to a file
@@ -109,18 +109,48 @@ ts-scan-agent analyze . --project my-product
 ## How much explanation you want: `--level`
 
 ```bash
-ts-scan-agent analyze . --level beginner       # step-by-step TrustSource onboarding + a glossary
-ts-scan-agent analyze . --level intermediate   # structure, commands, rationale, hints (default)
+ts-scan-agent analyze . --level beginner       # step-by-step TrustSource onboarding + a glossary (default)
+ts-scan-agent analyze . --level intermediate   # structure, commands, rationale, hints
 ts-scan-agent analyze . --level expert         # structure and commands only, no prose
 ```
 
-- **`beginner`** — never touched TrustSource before? This adds a short "Getting started" walk
-  from account creation through your first approval and release, plus a glossary for Module /
-  Infrastructure Module / Linked Module, on top of everything `intermediate` has.
-- **`intermediate`** (default) — today's report: structure, recommended commands, the reasoning
-  behind each classification, confidence, and hints like the naming-tip.
+- **`beginner`** (default) — never touched TrustSource before? This adds a short "Getting
+  started" walk from account creation through your first approval and release, plus a glossary
+  for Module / Infrastructure Module / Linked Module, on top of everything `intermediate` has.
+  Defaulting to this is deliberate: most people running this tool for the first time are
+  exactly the audience it exists to help - if you already know TrustSource, set `level =
+  "expert"` once in a [settings file](#settings-file-so-you-dont-have-to-repeat-flags) instead
+  of typing `--level` on every run.
+- **`intermediate`** — structure, recommended commands, the reasoning behind each
+  classification, confidence, and hints like the naming-tip.
 - **`expert`** — just the project tree and the commands to run. No rationale, no confidence, no
   explanatory prose — for people who already know TrustSource and just want the list.
+
+## Settings file (so you don't have to repeat flags)
+
+Every flag below can be set once instead of typed every run - useful for `--level`, but works
+for any of them (`llm`, `project`, `issue_repo`, ...). Precedence, lowest to highest:
+
+```
+CLI flag default  <  ~/.ts-scan-agent/config.toml  <  .ts-scan-agent.toml (in the current dir)  <  TS_SCAN_AGENT_<NAME> env var  <  explicit --flag
+```
+
+```toml
+# ~/.ts-scan-agent/config.toml - your personal defaults
+level = "expert"
+llm = "ollama"
+llm_model = "qwen3:32b"
+```
+
+```toml
+# .ts-scan-agent.toml, committed at the root of a repo - shared team/CI defaults,
+# picked up automatically when you run the tool from that directory
+level = "intermediate"
+issue_repo = "myorg/ts-scan-fork"
+```
+
+Use `--config PATH` to point at a different user-level file. Keys match the option names shown
+in `--help` (e.g. `level`, `llm`, `project`, `output`) - not the `--dashed-flag` spelling.
 
 ## Unsupported ecosystems
 
@@ -143,13 +173,14 @@ human in the loop.
 ## Full CLI reference
 
 ```
-ts-scan-agent analyze PATH [OPTIONS]
+ts-scan-agent [--config PATH] analyze PATH [OPTIONS]
 ```
 
 | Option | Default | Description |
 |---|---|---|
+| `--config PATH` (group-level, before `analyze`) | `~/.ts-scan-agent/config.toml` | User-level settings file - see [Settings file](#settings-file-so-you-dont-have-to-repeat-flags) |
 | `PATH` | — | Repository to analyze (required) |
-| `--level [beginner\|intermediate\|expert]` | `intermediate` | How much explanation the report includes - see above |
+| `--level [beginner\|intermediate\|expert]` | `beginner` | How much explanation the report includes - see above |
 | `--project TEXT` | directory name | TrustSource project name to propose |
 | `--llm [none\|ollama\|anthropic]` | `ollama` | LLM backend for ambiguous judgment calls |
 | `--llm-model TEXT` | backend-specific | Override the default model |

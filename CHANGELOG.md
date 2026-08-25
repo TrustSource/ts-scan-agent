@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-22
+
+### New Features
+    * Settings file support: `~/.ts-scan-agent/config.toml` (personal defaults) and `.ts-scan-agent.toml` in the current working directory (shared team/CI defaults, overrides the personal file) - keys match the `--help` option names, any `analyze` flag can be set this way, no per-option code needed (uses Click's own `default_map`, mirroring `ts-scan`'s own config pattern)
+    * `--config PATH` on the top-level command to point at a different user-level settings file
+    * `TS_SCAN_AGENT_<NAME>` environment variables now override settings-file values (via `auto_envvar_prefix`)
+
+### Changed
+    * **`--level` now defaults to `beginner`** (was `intermediate`) - this tool exists to help people with little TrustSource background, and that's exactly who runs it with no flags on a first try. Set `level = "expert"`/`"intermediate"` in a settings file to change your own default once instead of passing `--level` every run
+    * Renamed CLI parameters to match their flag names exactly, since they're now also settings-file/env-var keys: `--llm` is `llm` (was `llm_backend`), `--project` is `project` (was `project_name`), `-o/--output` is `output` (was `output_path`)
+
 ## [0.5.0] - 2026-08-22
 
 ### New Features

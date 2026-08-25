@@ -82,6 +82,10 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
   `anthropic.py` optional extra).
 - **`model.py`** — the shared data types (`DetectedUnit`, `Candidate`, `ScanConcept`) that
   every stage above passes to the next. Internal only in v1 (not exposed as a file format yet).
+- **`settings.py`** — merges `~/.ts-scan-agent/config.toml` and a project-local
+  `.ts-scan-agent.toml` (current working directory) into one dict, installed as the `analyze`
+  command's Click `default_map` so it's overridden by env vars/explicit flags rather than the
+  other way round. Mirrors `ts-scan`'s own `~/.ts-scan/config` pattern; see ADR-009.
 - **`ecosystem_proposals.py`** — for `DetectedUnit`s of kind `unsupported_ecosystem` (a manifest
   format from a small known list — `UNSUPPORTED_ECOSYSTEM_MARKERS`/`_EXTENSIONS` in
   `inventory.py` — that no `ts_scan.pm.*Scanner` accepted for that directory), drafts an
@@ -276,8 +280,9 @@ worth re-checking if that changes.
 angle: someone with no TrustSource background who just wants to upload a scan needs a very
 different report than someone who already knows the platform and just wants the commands. The
 user's proposal, adopted as-is: three levels — beginner (step-by-step onboarding +
-explanations), intermediate (structure + commands + explanations/hints — today's default),
-expert (no hints, just structure + commands) — surfaced as an early, prominent CLI flag.
+explanations), intermediate (structure + commands + explanations/hints — the default as of this
+ADR, changed to `beginner` the same day, see ADR-009), expert (no hints, just structure +
+commands) — surfaced as an early, prominent CLI flag.
 
 **Decision:** `--level` is the first option listed after the `PATH` argument (both in
 `--help` output and in the README's CLI reference), not buried among the LLM/issue-filing
@@ -294,6 +299,43 @@ invented) orthogonal to how much explanation surrounds them.
 get added later — mitigated by every new section needing an explicit level check rather than
 defaulting to "shown," so forgetting the check fails toward showing too much at `expert`
 (annoying) rather than hiding something a `beginner` needed.
+
+### ADR-009 — default `--level` is `beginner`; settings file to override it
+
+**Date:** 2026-08-22
+
+**Context:** Follow-up discussion to ADR-008: which level should ship as the default, and how
+does someone who already knows TrustSource avoid re-typing `--level expert` on every run? The
+user's answer to both, adopted as-is: default to `beginner` (this tool's whole reason to exist
+is helping people with little to no TrustSource background, and that's exactly who runs it with
+no flags on a first try — defaulting to less help would fail the primary audience to spare the
+already-informed one a single flag), and add a settings file so the trade-off isn't
+either/or — a sophisticated user sets `level = "expert"` once, globally or per-repo, and never
+sees the beginner walkthrough again.
+
+**Decision:** Changed `--level`'s hardcoded Click default from `intermediate` (ADR-008's
+original choice) to `beginner`. Added `settings.py` + a `--config` option on the `start` group,
+using Click's own `default_map` mechanism (the same feature `ts-scan` itself uses for
+`~/.ts-scan/config`) rather than hand-rolled config-merging logic — every current and future
+`analyze` option becomes settings-file-configurable for free, with no per-option code. Renamed
+three parameters (`llm_backend`→`llm`, `project_name`→`project`, `output_path`→`output`) so
+their Click-internal name — which is also the settings-file key and the `TS_SCAN_AGENT_<NAME>`
+env var name — matches the flag a human actually sees in `--help`, rather than an
+implementation-detail Python identifier. Two config files, merged: `~/.ts-scan-agent/config.toml`
+(personal defaults) and `.ts-scan-agent.toml` in the **current working directory** (not
+pre-parsed out of the `path` argument — `ts-scan`'s own equivalent, `tsproject.toml`, needs a
+custom Click Group subclass and a manual pre-parse pass to do that; skipped as more machinery
+than this single-command CLI needs, since running `ts-scan-agent analyze .` from the repo root
+means CWD already *is* the analyzed path in the common case). `auto_envvar_prefix` enables
+`TS_SCAN_AGENT_LEVEL=expert`-style overrides too, e.g. for CI, for free.
+
+**Consequences:** Precedence is now five-deep (hardcoded default < user config < project config
+< env var < CLI flag) — more to hold in your head than a single flag, but each layer mirrors an
+already-familiar convention (`ts-scan`'s own config layering; envvar-overrides-default is
+standard Click). The project-config-via-CWD simplification means a `.ts-scan-agent.toml`
+committed to a repo is only picked up when `ts-scan-agent` is actually run from that repo's
+root — invoking it with a distant relative path from elsewhere silently misses it, which should
+be called out if it trips someone up in practice.
 
 ---
 
@@ -332,3 +374,11 @@ defaulting to "shown," so forgetting the check fails toward showing too much at 
   Git-hosting-specific (`.github/workflows`, `.gitlab-ci.yml`) - a Jenkinsfile is still caught
   either way. This tool also never clones/checks out anything itself, for any VCS - it only ever
   analyzes an already-local directory you point it at.
+
+- **Project-level settings (`.ts-scan-agent.toml`) are discovered from the current working
+  directory, not the analyzed `path` argument** (v0.6.0, ADR-009) - a file committed at a repo's
+  root is only picked up when you actually run `ts-scan-agent` from inside that repo. Running it
+  against a repo from elsewhere (`ts-scan-agent analyze ../some-other-repo`) misses that repo's
+  settings file entirely; only `~/.ts-scan-agent/config.toml` still applies. Fix, if this turns
+  out to matter in practice: resolve `path` before installing `default_map` (`ts-scan`'s own
+  `tsproject.toml` handling shows the pattern, at the cost of a custom Click Group subclass).
