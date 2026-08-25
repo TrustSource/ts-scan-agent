@@ -49,6 +49,23 @@ def test_ignores_node_modules(tmp_path: Path):
     assert not any('node_modules' in p for p in ecosystem_paths)
 
 
+def test_works_on_an_svn_working_copy(tmp_path: Path):
+    # Nothing in the pipeline depends on Git - .svn is pruned like any other IGNORED_DIRS entry.
+    # Covers both modern (single root .svn) and pre-1.7 (.svn in every directory) SVN layouts.
+    _write(tmp_path / '.svn/pristine/composer.json', '{}')  # would be a false unsupported-ecosystem hit
+    _write(tmp_path / 'package.json', json.dumps({'name': 'svn-demo'}))
+    _write(tmp_path / 'lib/.svn/composer.json', '{}')  # pre-1.7 style nested .svn
+    _write(tmp_path / 'lib/mix.exs', 'defmodule Demo do\nend\n')
+
+    units = scan_inventory(tmp_path)
+
+    assert not any('.svn' in u.path for u in units)
+    ecosystem_paths = {u.path for u in units if u.kind == 'ecosystem'}
+    unsupported = {(u.path, u.ecosystem) for u in units if u.kind == 'unsupported_ecosystem'}
+    assert '.' in ecosystem_paths
+    assert unsupported == {('lib', 'Elixir (Hex)')}
+
+
 def test_honors_root_gitignore_for_directories(tmp_path: Path):
     _write(tmp_path / '.gitignore', 'generated/\n')
     _write(tmp_path / 'package.json', '{}')

@@ -283,12 +283,23 @@ worth re-checking if that changes.
   `render.py` to recommend pinning as the actual fix rather than just "pick a stable name."
 
 - **`.gitignore` support is intentionally narrow (v0.4.0):** only the **root** `.gitignore` is
-  read — nested per-directory `.gitignore` files are not merged in, and ecosystem-equivalent
-  ignore files (`.dockerignore`, `.npmignore`, …) aren't honored at all (different semantics:
-  build-context/publish exclusion, not "not part of the source"). It also only gates *our own*
-  detection (Dockerfiles, CI configs, monorepo markers, unsupported-ecosystem markers) plus
-  directory descent — it does **not** reach into `ts_scan.pm.*Scanner.accepts()`, so a manifest
-  file that's individually gitignored (rare) inside a *non*-ignored directory can still trigger
-  a Module candidate, since `accepts()` re-checks the filesystem directly rather than going
-  through our filtered `filenames` list. Extend `inventory.py`'s `_load_gitignore_spec()` to a
-  proper per-directory cascade if nested-gitignore repos turn out to matter in practice.
+  read — nested per-directory `.gitignore` files are not merged in, and ecosystem-/VCS-equivalent
+  ignore mechanisms (`.dockerignore`, `.npmignore`, SVN's `svn:ignore` property, …) aren't
+  honored at all (different semantics, or - for `svn:ignore` - not even a plain file we could
+  read the same way). It also only gates *our own* detection (Dockerfiles, CI configs, monorepo
+  markers, unsupported-ecosystem markers) plus directory descent — it does **not** reach into
+  `ts_scan.pm.*Scanner.accepts()`, so a manifest file that's individually gitignored (rare)
+  inside a *non*-ignored directory can still trigger a Module candidate, since `accepts()`
+  re-checks the filesystem directly rather than going through our filtered `filenames` list.
+  Extend `inventory.py`'s `_load_gitignore_spec()` to a proper per-directory cascade if
+  nested-gitignore repos turn out to matter in practice.
+
+- **VCS other than Git works, but only gets the baseline treatment.** Nothing in the pipeline
+  actually depends on Git — `scan_inventory()` walks whatever local directory it's given, and
+  `IGNORED_DIRS` already prunes `.svn` and `.hg` (verified 2026-08-22: this correctly skips both
+  modern single-root and pre-1.7 per-directory `.svn` layouts, since the prune re-applies at
+  every level `os.walk` descends into). What SVN/Mercurial working copies don't get is anything
+  equivalent to `.gitignore` filtering (see above) or the CI-config detection list, which is
+  Git-hosting-specific (`.github/workflows`, `.gitlab-ci.yml`) - a Jenkinsfile is still caught
+  either way. This tool also never clones/checks out anything itself, for any VCS - it only ever
+  analyzes an already-local directory you point it at.
