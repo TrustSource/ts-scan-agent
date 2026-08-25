@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-26
+
+### New Features
+    * `Podfile` (CocoaPods) added to `UNSUPPORTED_ECOSYSTEM_MARKERS` - iOS repos now get a drafted GitHub issue proposal like any other unsupported ecosystem. Verified against the full history of the `trustsource` and `eacg-gmbh` GitHub orgs: no CocoaPods plugin has ever existed there, unlike Swift (see below)
+
+### Notes
+    * Swift and CocoaPods scanning support is being tracked by the user directly in the `ts-scan` repo, not here. Documented what's already known in ARCHITECTURE.md: Swift has real prior art ([trustsource/ts-spm](https://github.com/TrustSource/ts-spm), deprecated but its scanner core is directly portable), CocoaPods has none
+    * On `mai.fit-app`, the new CocoaPods proposal doesn't actually surface yet - the still-open `ts-scan#30` NuGet false-positive (see 0.6.1) sets `known_ecosystem_found = True` for that same directory first, so the unsupported-ecosystem check never runs there. Confirmed working in isolation via a dedicated unit test
+
 ## [0.6.1] - 2026-08-26
 
 Found dogfooding v0.6.0 against a real Flutter/Melos monorepo.

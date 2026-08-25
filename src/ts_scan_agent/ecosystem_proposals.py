@@ -15,7 +15,16 @@ ECOSYSTEM_FACTS = {
     'Swift (Swift Package Manager)':
         'No central registry - dependencies resolve directly from git repository URLs and '
         'tags. Manifest: Package.swift (Swift source). Lockfile: Package.resolved (JSON, '
-        'pinned revisions).',
+        'pinned revisions). Prior art: TrustSource previously shipped a standalone SPM plugin, '
+        'github.com/TrustSource/ts-spm (deprecated, unmaintained) - its scanner core is just '
+        '`swift package show-dependencies --format json` plus a recursive walk of the result, '
+        'directly portable to a ts_scan.pm.swift.SwiftScanner.',
+    'iOS (CocoaPods)':
+        'Registry: the CocoaPods Specs CDN (no TrustSource plugin has ever covered this - '
+        'verified against the full github.com/trustsource and github.com/eacg-gmbh org history, '
+        '2026-08-26). Manifest: Podfile (Ruby DSL, dependency constraints). '
+        'Lockfile: Podfile.lock (YAML-like, exact resolved pod versions) - the more reliable '
+        'thing to parse, similar to how other lockfile-based scanners in this codebase work.',
     'Elixir (Hex)':
         'Registry: Hex.pm. Manifest: mix.exs (Elixir source, deps function). '
         'Lockfile: mix.lock.',

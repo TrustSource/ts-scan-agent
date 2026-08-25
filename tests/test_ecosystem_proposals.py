@@ -26,6 +26,20 @@ def test_composer_manifest_produces_a_proposal_with_static_facts(tmp_path: Path)
     assert p.title == 'Add ts-scan support for PHP (Composer)'
 
 
+def test_podfile_produces_a_cocoapods_proposal_with_static_facts(tmp_path: Path):
+    # Found while dogfooding against mai.fit-app (2026-08-26) - TrustSource has never had a
+    # CocoaPods plugin (verified against full org history), unlike Swift/SPM (ts-spm, deprecated).
+    _write(tmp_path / 'Podfile', "platform :ios, '13.0'\n")
+
+    units = scan_inventory(tmp_path)
+    proposals = build_proposals(units)
+
+    assert len(proposals) == 1
+    p = proposals[0]
+    assert p.ecosystem == 'iOS (CocoaPods)'
+    assert 'Podfile.lock' in p.body
+
+
 def test_cmake_project_does_not_produce_a_proposal(tmp_path: Path):
     # C/C++ is already covered via DeepScan - CMakeLists.txt must never look "unsupported".
     _write(tmp_path / 'CMakeLists.txt', 'project(demo)\n')

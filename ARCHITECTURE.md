@@ -396,3 +396,16 @@ be called out if it trips someone up in practice.
   since "inside a recognized workspace" reads as a stronger signal to `mapping.py` regardless of
   whether the underlying ecosystem match was itself bogus - a correctness improvement on one
   axis can amplify an unrelated upstream bug's visibility on another.
+
+- **Swift/CocoaPods scanning is planned in `ts-scan` itself, tracked by the user directly in
+  that repo (2026-08-26), not here.** Prior art exists for Swift:
+  [trustsource/ts-spm](https://github.com/TrustSource/ts-spm), a deprecated standalone plugin
+  whose scanner core (`swift package show-dependencies --format json` + a recursive walk) is
+  directly portable to a `ts_scan.pm.swift.SwiftScanner`. CocoaPods has **no prior art** -
+  verified against the full history of both the `trustsource` and `eacg-gmbh` GitHub orgs, no
+  plugin for it has ever existed. Until either lands: `Package.swift` and `Podfile` stay in
+  `inventory.py`'s `UNSUPPORTED_ECOSYSTEM_MARKERS` (the latter added 2026-08-26, found while
+  dogfooding against mai.fit-app). **Once ts-scan adds either scanner:** remove the
+  corresponding entry from `UNSUPPORTED_ECOSYSTEM_MARKERS` and its `ECOSYSTEM_FACTS` entry in
+  `ecosystem_proposals.py` - otherwise this tool would keep proposing GitHub issues for
+  ecosystems `ts-scan` already supports.

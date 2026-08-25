@@ -41,7 +41,7 @@ it already knows it's unsure about:
    keys a module by name — a name that changes every release, like one derived from a Docker
    image tag, silently orphans the old module's whitelist decisions, muted vulnerabilities and
    approval history), any detected CI configs, and — if your repo uses a build system `ts-scan`
-   can't scan yet (PHP/Composer, Ruby, Swift, Elixir, Haskell, Perl, Zig, Elm today) — a drafted
+   can't scan yet (PHP/Composer, Ruby, Swift, CocoaPods, Elixir, Haskell, Perl, Zig, Elm today) — a drafted
    GitHub issue proposing support for it, which is *never* filed without you explicitly
    reviewing and confirming it (see [Unsupported ecosystems](#unsupported-ecosystems) below).
 

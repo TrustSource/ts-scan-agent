@@ -36,6 +36,7 @@ UNSUPPORTED_ECOSYSTEM_MARKERS = {
     'composer.json': 'PHP (Composer)',
     'Gemfile': 'Ruby (Bundler)',
     'Package.swift': 'Swift (Swift Package Manager)',
+    'Podfile': 'iOS (CocoaPods)',
     'mix.exs': 'Elixir (Hex)',
     'stack.yaml': 'Haskell (Stack)',
     'cpanfile': 'Perl (CPAN)',
