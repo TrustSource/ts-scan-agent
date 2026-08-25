@@ -9,7 +9,7 @@ from . import __version__
 from .inventory import scan_inventory
 from .mapping import build_candidates
 from .interview import run_interview
-from .render import render_markdown
+from .render import render_markdown, Level, LEVEL_CHOICES
 from .model import ScanConcept, ExistingIssueRef
 from .llm import LLMClient, NullLLMClient
 from .ecosystem_proposals import build_proposals
@@ -46,6 +46,11 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
 
 @start.command('analyze', help='Analyze a repository and propose a TrustSource scan concept')
 @click.argument('path', type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option('--level', type=click.Choice(LEVEL_CHOICES), default='intermediate', show_default=True,
+              help='How much explanation the report includes. beginner: step-by-step '
+                   'TrustSource onboarding plus a concepts glossary, in addition to everything '
+                   'intermediate has. intermediate: structure, commands, rationale and hints '
+                   '(default). expert: structure and commands only, no prose.')
 @click.option('--project', 'project_name', required=False,
               help='TrustSource project name to propose (defaults to the directory name)')
 @click.option('--llm', 'llm_backend', type=click.Choice(['none', 'ollama', 'anthropic']),
@@ -71,7 +76,7 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
                    'an interactive confirmation.')
 @click.option('-o', '--output', 'output_path', type=click.Path(path_type=Path), required=False,
               help='Write the Markdown report here instead of printing it')
-def analyze(path: Path, project_name: t.Optional[str], llm_backend: str,
+def analyze(path: Path, level: Level, project_name: t.Optional[str], llm_backend: str,
             llm_model: t.Optional[str], ollama_url: str,
             anthropic_api_key: t.Optional[str], non_interactive: bool,
             propose_issues: bool, issue_repo: str, file_issues: bool,
@@ -106,7 +111,7 @@ def analyze(path: Path, project_name: t.Optional[str], llm_backend: str,
         else:
             _review_and_file_issues(concept, issue_repo)
 
-    report = render_markdown(concept, units, issue_repo=issue_repo)
+    report = render_markdown(concept, units, issue_repo=issue_repo, level=level)
 
     if output_path:
         output_path.write_text(report)

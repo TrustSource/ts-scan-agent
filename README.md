@@ -106,6 +106,22 @@ ts-scan-agent analyze . --llm anthropic --anthropic-api-key sk-...
 ts-scan-agent analyze . --project my-product
 ```
 
+## How much explanation you want: `--level`
+
+```bash
+ts-scan-agent analyze . --level beginner       # step-by-step TrustSource onboarding + a glossary
+ts-scan-agent analyze . --level intermediate   # structure, commands, rationale, hints (default)
+ts-scan-agent analyze . --level expert         # structure and commands only, no prose
+```
+
+- **`beginner`** — never touched TrustSource before? This adds a short "Getting started" walk
+  from account creation through your first approval and release, plus a glossary for Module /
+  Infrastructure Module / Linked Module, on top of everything `intermediate` has.
+- **`intermediate`** (default) — today's report: structure, recommended commands, the reasoning
+  behind each classification, confidence, and hints like the naming-tip.
+- **`expert`** — just the project tree and the commands to run. No rationale, no confidence, no
+  explanatory prose — for people who already know TrustSource and just want the list.
+
 ## Unsupported ecosystems
 
 If your repo uses a build system `ts-scan` can't scan yet, the report includes a drafted GitHub
@@ -133,6 +149,7 @@ ts-scan-agent analyze PATH [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `PATH` | — | Repository to analyze (required) |
+| `--level [beginner\|intermediate\|expert]` | `intermediate` | How much explanation the report includes - see above |
 | `--project TEXT` | directory name | TrustSource project name to propose |
 | `--llm [none\|ollama\|anthropic]` | `ollama` | LLM backend for ambiguous judgment calls |
 | `--llm-model TEXT` | backend-specific | Override the default model |

@@ -75,7 +75,9 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
 - **`interview.py`** — walks the `Candidate`s with an unresolved `open_question` and asks a
   fixed CLI question per item.
 - **`render.py`** — turns the finished `ScanConcept` (plus the raw `DetectedUnit` list, for the
-  CI/monorepo-marker sections) into the Markdown report.
+  CI/monorepo-marker sections) into the Markdown report. Takes a `level`
+  (`beginner`/`intermediate`/`expert`) that only ever adds or removes *prose* — it never
+  changes which candidates exist or what command each one gets; see ADR-008.
 - **`llm/`** — the `LLMClient` abstraction plus concrete backends (`ollama.py` default,
   `anthropic.py` optional extra).
 - **`model.py`** — the shared data types (`DetectedUnit`, `Candidate`, `ScanConcept`) that
@@ -265,6 +267,33 @@ stale advice. `ecosystem_proposals.py`'s LLM-drafted "suggested approach" text i
 *hypothetical future* scanner for an ecosystem ts-scan doesn't support yet — it never claims to
 give a runnable command for an existing one, so it's out of scope for this guarantee, but stays
 worth re-checking if that changes.
+
+### ADR-008 — `--level` controls prose only, never the underlying recommendation
+
+**Date:** 2026-08-22
+
+**Context:** Discussed with the user from a "put yourself in a first-time customer's shoes"
+angle: someone with no TrustSource background who just wants to upload a scan needs a very
+different report than someone who already knows the platform and just wants the commands. The
+user's proposal, adopted as-is: three levels — beginner (step-by-step onboarding +
+explanations), intermediate (structure + commands + explanations/hints — today's default),
+expert (no hints, just structure + commands) — surfaced as an early, prominent CLI flag.
+
+**Decision:** `--level` is the first option listed after the `PATH` argument (both in
+`--help` output and in the README's CLI reference), not buried among the LLM/issue-filing
+flags. `render.py`'s `level` parameter only ever adds prose (`beginner`: prepends a
+"Getting started" walkthrough — grounded in ts-docs' own onboarding recipe, not invented — plus
+a Module/Infrastructure Module/Linked Module glossary) or removes it (`expert`: drops rationale,
+confidence, the naming-tip, and explanatory sentences, keeping just the project tree and the
+`ts_scan_command` values). **It never changes `mapping.py`'s classification logic, confidence
+scores, or which command is recommended** — Inventory and Mapping run identically regardless of
+`--level`; only `render.py` branches on it. This keeps the ADR-007 guarantee (commands are never
+invented) orthogonal to how much explanation surrounds them.
+
+**Consequences:** Three rendering paths to keep in sync in `render.py` as new report sections
+get added later — mitigated by every new section needing an explicit level check rather than
+defaulting to "shown," so forgetting the check fails toward showing too much at `expert`
+(annoying) rather than hiding something a `beginner` needed.
 
 ---
 
