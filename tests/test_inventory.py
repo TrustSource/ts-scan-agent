@@ -49,6 +49,29 @@ def test_ignores_node_modules(tmp_path: Path):
     assert not any('node_modules' in p for p in ecosystem_paths)
 
 
+def test_ignores_cocoapods_pods_dir(tmp_path: Path):
+    # Found via a real repo (mai.fit-app, 2026-08-26): ts-scan's NugetScanner false-positives
+    # on Xcode project bundles (*.xcodeproj contains project.pbxproj, matching its overly broad
+    # `*.*proj` glob) - Pods/ is where CocoaPods vendors exactly that kind of content.
+    _write(tmp_path / 'pubspec.yaml', 'name: demo\n')
+    _write(tmp_path / 'ios/Pods/Pods.xcodeproj/project.pbxproj', '')
+
+    units = scan_inventory(tmp_path)
+
+    assert not any('Pods' in u.path for u in units)
+
+
+def test_detects_melos_monorepo(tmp_path: Path):
+    _write(tmp_path / 'melos.yaml', 'name: demo_workspace\n')
+    _write(tmp_path / 'pubspec.yaml', 'name: demo_workspace\n')
+    _write(tmp_path / 'packages/fitcore/pubspec.yaml', 'name: fitcore\n')
+
+    units = scan_inventory(tmp_path)
+
+    monorepo_paths = {u.path for u in units if u.kind == 'monorepo_root'}
+    assert '.' in monorepo_paths
+
+
 def test_works_on_an_svn_working_copy(tmp_path: Path):
     # Nothing in the pipeline depends on Git - .svn is pruned like any other IGNORED_DIRS entry.
     # Covers both modern (single root .svn) and pre-1.7 (.svn in every directory) SVN layouts.

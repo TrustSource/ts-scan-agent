@@ -12,6 +12,7 @@ IGNORED_DIRS = {
     'node_modules', 'vendor', 'venv', '.venv', '__pycache__',
     'dist', 'build', 'target', 'bin', 'obj',
     '.mypy_cache', '.pytest_cache', '.ruff_cache', '.tox',
+    'Pods',  # CocoaPods' vendor dir - iOS/macOS equivalent of node_modules
 }
 
 MAX_DEPTH = 6
@@ -24,6 +25,7 @@ DOCKERFILE_NAMES = {'Dockerfile'}
 
 MONOREPO_MARKER_FILES = {
     'pnpm-workspace.yaml', 'lerna.json', 'nx.json', 'rush.json',
+    'melos.yaml',  # Dart/Flutter monorepo tool - https://melos.invertase.dev
 }
 
 # Ecosystems ts-scan has no dependency-tree scanner for. Deliberately excludes anything

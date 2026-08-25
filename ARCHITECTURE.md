@@ -47,8 +47,9 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
 
 - **`inventory.py`** — deterministic repo walker. Reuses `ts_scan.pm.*Scanner.accepts()` for
   ecosystem detection instead of re-implementing manifest parsing; adds its own detection for
-  Dockerfiles, CI config files and monorepo markers (`pnpm-workspace.yaml`, `lerna.json`, an
-  npm `workspaces` field, etc). Produces `DetectedUnit` objects. Never touches an LLM. Honors
+  Dockerfiles, CI config files and monorepo markers (`pnpm-workspace.yaml`, `lerna.json`,
+  `melos.yaml`, an npm `workspaces` field, etc). Produces `DetectedUnit` objects. Never touches
+  an LLM. Honors
   the repo's root `.gitignore` (via `pathspec`) - ignored directories are never descended into
   and ignored files never become `DetectedUnit`s, so vendored/generated/ignored content can't
   produce a false Module or a false "unsupported ecosystem" proposal. Scope is deliberately
@@ -382,3 +383,16 @@ be called out if it trips someone up in practice.
   settings file entirely; only `~/.ts-scan-agent/config.toml` still applies. Fix, if this turns
   out to matter in practice: resolve `path` before installing `default_map` (`ts-scan`'s own
   `tsproject.toml` handling shows the pattern, at the cost of a custom Click Group subclass).
+
+- **`ts-scan`'s own `NugetScanner` false-positives on Xcode/iOS artifacts** (found dogfooding
+  v0.6.0 against a real Flutter/Melos monorepo, 2026-08-26) — its directory-mode project
+  detection uses `path.glob('*.*proj')`, which unintentionally also matches `.xcodeproj`
+  bundles, the `project.pbxproj` file inside them, and even Apple's own `.lproj` localization
+  directories. Filed upstream: [trustsource/ts-scan#30](https://github.com/TrustSource/ts-scan/issues/30).
+  Not something `inventory.py` can filter around cleanly (`ts_scan.pm.*Scanner.accepts()` is a
+  black box we deliberately don't second-guess per ADR-003) — this is purely an upstream fix to
+  wait for. **Side effect worth knowing:** fixing a repo's monorepo detection (e.g. the
+  `melos.yaml` marker added the same day) can *raise* confidence on these false positives too,
+  since "inside a recognized workspace" reads as a stronger signal to `mapping.py` regardless of
+  whether the underlying ecosystem match was itself bogus - a correctness improvement on one
+  axis can amplify an unrelated upstream bug's visibility on another.

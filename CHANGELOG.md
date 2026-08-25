@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-26
+
+Found dogfooding v0.6.0 against a real Flutter/Melos monorepo.
+
+### Fixed
+    * `melos.yaml` (Dart/Flutter monorepo tool) added to the monorepo-marker list - packages in a Melos workspace were previously treated as ambiguous nested packages (50% confidence, open question) instead of confident workspace members (90%, no question)
+    * `Pods` (CocoaPods' vendor directory, the iOS equivalent of `node_modules`) added to `IGNORED_DIRS`
+
+### Notes
+    * Filed [trustsource/ts-scan#30](https://github.com/TrustSource/ts-scan/issues/30): `ts-scan`'s own `NugetScanner` false-positives on Xcode/iOS artifacts (`.xcodeproj`, `.pbxproj`, even Apple's `.lproj` directories) due to an overly broad glob - not something this project's Inventory can filter around (see ARCHITECTURE.md Known Limitations)
+
 ## [0.6.0] - 2026-08-22
 
 ### New Features
