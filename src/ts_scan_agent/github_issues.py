@@ -8,10 +8,11 @@ class GitHubIssueError(Exception):
     pass
 
 
-def find_similar_issues(repo: str, query: str) -> t.List[t.Dict[str, t.Any]]:
-    """Best-effort duplicate check via `gh issue list --search`. Read-only. Degrades to an
-    empty list (never raises) if `gh` isn't installed or not authenticated - dedup is a safety
-    net on top of the human review step, not a hard requirement for drafting a proposal."""
+def find_similar_issues(repo: str, query: str) -> t.Optional[t.List[t.Dict[str, t.Any]]]:
+    """Best-effort duplicate check via `gh issue list --search`. Read-only. Degrades to None
+    (never raises) if `gh` isn't installed or not authenticated - dedup is a safety net on top
+    of the human review step, not a hard requirement for drafting a proposal. None means "not
+    checked", as opposed to [] for "checked, nothing found"."""
 
     try:
         result = subprocess.run(
@@ -21,20 +22,20 @@ def find_similar_issues(repo: str, query: str) -> t.List[t.Dict[str, t.Any]]:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as err:
         warnings.warn(f'Could not check {repo} for existing issues ({err}); skipping dedup.')
-        return []
+        return None
 
     if result.returncode != 0:
         warnings.warn(
             f'Could not check {repo} for existing issues ({result.stderr.strip()}); '
             'skipping dedup.'
         )
-        return []
+        return None
 
     try:
         return json.loads(result.stdout)
     except ValueError:
         warnings.warn(f'Could not parse `gh issue list` output for {repo}; skipping dedup.')
-        return []
+        return None
 
 
 def file_issue(repo: str, title: str, body: str, labels: t.List[str]) -> str:

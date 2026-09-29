@@ -1,0 +1,12 @@
+{
+  "name": "ts-scan-agent",
+  "description": "Proposes a TrustSource scan concept for a repository (Modules, Infrastructure Modules, Linked Modules) with the ts-scan command for each, asking open questions in chat.",
+  "version": "0.7.0",
+  "author": {
+    "name": "EACG GmbH"
+  },
+  "homepage": "https://github.com/TrustSource/ts-scan-agent",
+  "repository": "https://github.com/TrustSource/ts-scan-agent",
+  "license": "Apache-2.0",
+  "keywords": ["TrustSource", "ts-scan", "SCA", "SBOM", "scan concept"]
+}

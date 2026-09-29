@@ -1,0 +1,47 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # tests/test_skill_scripts.py also runs the skill's Node port against the package.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pip install -e . pytest
+      - run: pytest -q
+
+  # The skill's scripts must run on the oldest runtimes SKILL.md promises, with nothing installed.
+  skill-scripts-oldest-runtimes:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Python and Node ports produce the same report on this repo
+        run: |
+          S=skills/ts-scan-agent/scripts
+          for level in beginner intermediate expert; do
+            python $S/scan_concept.py analyze . --level $level > py.md
+            node $S/scan_concept.mjs analyze . --level $level > js.md
+            diff py.md js.md
+          done
+          python $S/scan_concept.py analyze . --format json > py.json
+          node $S/scan_concept.mjs analyze . --format json > js.json
+          python -c "import json; assert json.load(open('py.json')) == json.load(open('js.json'))"

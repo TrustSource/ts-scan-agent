@@ -116,3 +116,15 @@ def test_works_without_a_gitignore_present(tmp_path: Path):
     units = scan_inventory(tmp_path)
 
     assert any(u.kind == 'ecosystem' for u in units)
+
+
+def test_skips_a_gitignore_pattern_that_is_not_a_valid_regex(tmp_path: Path):
+    # `[z-a]` is a reversed range: git never matches it, pathspec raises re.error on it.
+    _write(tmp_path / '.gitignore', '[z-a]\ngenerated/\n')
+    _write(tmp_path / 'package.json', '{}')
+    _write(tmp_path / 'generated/composer.json', '{}')
+
+    units = scan_inventory(tmp_path)
+
+    assert any(u.kind == 'ecosystem' and u.path == '.' for u in units)
+    assert not any(u.path.startswith('generated') for u in units)

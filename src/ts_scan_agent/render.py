@@ -6,6 +6,8 @@ from .model import ScanConcept, Candidate, DetectedUnit, EcosystemProposal
 Level = t.Literal['beginner', 'intermediate', 'expert']
 LEVEL_CHOICES: t.Tuple[Level, ...] = ('beginner', 'intermediate', 'expert')
 
+FORMAT_CHOICES = ('markdown', 'json')
+
 _SECTION_TITLES = {
     'module': 'Modules',
     'infrastructure_module': 'Infrastructure Modules',
@@ -97,6 +99,12 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
         )
         return '\n'.join(lines)
 
+    if not p.existing_issue_checked:
+        lines.append(
+            f'- Not checked for an existing issue. Search first: '
+            f'`gh issue list --repo {issue_repo} --search {shlex.quote(p.ecosystem)} --state all`'
+        )
+
     if level == 'expert':
         title_arg = shlex.quote(p.title)
         body_arg = shlex.quote(p.body)
@@ -104,7 +112,8 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
                       f'--body {body_arg} --label enhancement\n  ```')
         return '\n'.join(lines)
 
-    lines.append('- No existing issue found for this ecosystem.')
+    if p.existing_issue_checked:
+        lines.append('- No existing issue found for this ecosystem.')
     lines.append('')
     lines.append(f'**Draft title:** {p.title}')
     lines.append('')
@@ -118,9 +127,17 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
         f'  gh issue create --repo {issue_repo} --title {title_arg} --body {body_arg} '
         f'--label enhancement\n'
         f'  ```\n'
-        f'  or re-run with `--file-issues` to be walked through review + filing.'
+        f'  or re-run the `ts-scan-agent` CLI with `--file-issues` to be walked through '
+        f'review + filing.'
     )
     return '\n'.join(lines)
+
+
+def render_json(concept: ScanConcept) -> str:
+    """The ScanConcept as JSON, for scripts and coding agents (ADR-004's planned additive
+    export). Same data the Markdown report is built from - `ts_scan_command` values are the
+    exact strings Markdown shows, so a consumer must copy them verbatim (ADR-007)."""
+    return concept.model_dump_json(indent=2)
 
 
 def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
@@ -154,6 +171,19 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
             lines.append(_render_candidate(c, level))
             lines.append('')
 
+    if concept.folded_into_parent:
+        lines.append('## Folded into parent modules')
+        lines.append('')
+        if level != 'expert':
+            lines.append(
+                'You said these belong to their parent module, so they get no scan of their '
+                'own:'
+            )
+            lines.append('')
+        for f in sorted(concept.folded_into_parent, key=lambda f: (f.path, f.ecosystem or '')):
+            lines.append(f'- `{f.path}` - {f.name}' + (f' ({f.ecosystem})' if f.ecosystem else ''))
+        lines.append('')
+
     open_questions = concept.low_confidence_candidates
     if open_questions:
         lines.append('## Still open')
@@ -164,7 +194,8 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
         else:
             lines.append(
                 'The following items could not be classified with confidence and were not '
-                'resolved (re-run interactively to answer them):'
+                'resolved (pass `--answers` mapping each path below to its answer to resolve '
+                'them; the `ts-scan-agent` CLI can also ask them interactively):'
             )
             lines.append('')
             for c in open_questions:
