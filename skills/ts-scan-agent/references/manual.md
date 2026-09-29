@@ -103,7 +103,7 @@ Tell the user this was produced in manual mode, then give:
 2. Sections **Modules**, **Infrastructure Modules**, **Linked Module candidates** (skip empty
    ones), each item sorted by path: path, name, ecosystem, confidence, a one-line reason, and
    its command in a `bash` block.
-3. **Folded into parent modules**, if any: each folded path and name, with no command.
+3. **Folded into parent modules**, if any: each folded path, name and ecosystem, with no command.
 4. **Still open**: each unanswered question with its path.
 5. **Detected CI/CD configuration**: the CI files, with a note to wire the commands into them.
 6. **Monorepo markers detected**, if any: scan each workspace package on its own, never the

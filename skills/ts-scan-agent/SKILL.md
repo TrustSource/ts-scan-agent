@@ -92,7 +92,8 @@ RUN analyze . --answers '{"tools/helper": "no", "Dockerfile": "module"}'
 ```
 
 Leave out `--answers` if there was nothing to ask. If a path contains a single quote, write the
-JSON to a temp file outside the repository and pass its path to `--answers` instead. Keep `--level` at its default unless the
+JSON to a temp file outside the repository and pass its path to `--answers` instead. The
+bundled scripts read JSON only; a `.toml` answers file works only with the full CLI. Keep `--level` at its default unless the
 user asked for less explanation (`--level intermediate` or `--level expert`). Add
 `--project <name>` only if the user named the TrustSource project.
 
@@ -100,9 +101,9 @@ Show the user the Markdown report from stdout without paraphrasing the commands 
 script exits non-zero because of the answers file (unknown path or invalid value), fix the file
 from the error message and run it again.
 
-The report's wording comes from the full ts-scan-agent CLI: where it says "re-run
-interactively" or "re-run with `--file-issues`", that is handled by you in this conversation
-instead (step 5).
+The report's wording comes from the full ts-scan-agent CLI: where it mentions the CLI asking
+questions interactively or `--file-issues`, that is handled by you in this conversation instead
+(step 5).
 
 ## 5. Follow-ups
 

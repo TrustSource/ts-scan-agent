@@ -4,6 +4,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from ts_scan_agent import cli
 from ts_scan_agent.cli import _parse_edited_proposal, start
 
 
@@ -138,7 +139,7 @@ def test_explicit_non_interactive_does_not_warn_about_tty(tmp_path: Path):
 def test_still_open_mentions_answers_flag(tmp_path: Path):
     result = _analyze_fixture(tmp_path, ['--non-interactive', '--level', 'intermediate'])
 
-    assert '--answers FILE' in result.stdout
+    assert 'pass `--answers` mapping each path' in result.stdout
 
 
 def test_format_json_dumps_the_scan_concept(tmp_path: Path):
@@ -342,3 +343,13 @@ def test_linked_module_answered_yes_keeps_it_linked():
     assert c.candidate_type == 'linked_module'
     assert c.open_question is None
     assert 'confirmed it is published/released on its own' in c.rationale
+
+
+def test_closed_stdin_counts_as_no_tty(monkeypatch):
+    class ClosedStdin:
+        def isatty(self):
+            raise ValueError('I/O operation on closed file')
+
+    monkeypatch.setattr(cli.sys, 'stdin', ClosedStdin())
+
+    assert cli._stdin_is_tty() is False

@@ -10,19 +10,22 @@ Ships `ts-scan-agent` as a self-contained Agent Skill for Claude Code, GitHub Co
 ### New Features
     * `skills/ts-scan-agent/`: an [Agent Skills](https://agentskills.io) skill that works out the scan concept, asks the open questions in chat and shows the final report, with nothing to install. It bundles dependency-free ports of the pipeline, `scripts/scan_concept.py` (Python 3.8+ standard library) and `scripts/scan_concept.mjs` (Node.js 18+), and falls back to `references/manual.md` when neither runtime exists. It copies `ts-scan` commands verbatim and never files an issue or runs `ts-scan upload` without the user's confirmation
     * Install by copying the folder into `.claude/skills/`, `.github/skills/`, `~/.copilot/skills/` and similar, or as a plugin via `.claude-plugin/plugin.json` and `marketplace.json` (`/plugin marketplace add TrustSource/ts-scan-agent`, then `/plugin install ts-scan-agent@trustsource`; Copilot CLI has `copilot plugin` equivalents)
-    * `--answers FILE|JSON`: a map from candidate path to answer, as a JSON (or `.toml`) file or inline JSON, applied instead of the interview. Unknown paths and invalid values exit non-zero
+    * `--answers FILE|JSON`: a map from candidate path to answer, as a JSON (or `.toml`) file or inline JSON, applied instead of the interview. Unknown paths and invalid values exit non-zero. When one directory has several open candidates (e.g. `pyproject.toml` and `package.json` side by side), the answer for that path applies to all of them. The bundled skill scripts read JSON only and reject a `.toml` file with a clear error
     * `--format [markdown|json]`: `json` dumps the `ScanConcept`
     * GitHub Actions workflow running the test suite on Python 3.10-3.12, plus the skill scripts on Python 3.8 and Node.js 18
 
 ### Changed
     * With no TTY on stdin (and neither `--non-interactive` nor `--answers`), `analyze` now falls back to non-interactive with a warning on stderr instead of aborting at the first prompt with no report
     * Interview and `--file-issues` prompts now go to stderr, so stdout carries only the report
-    * The "Still open" section mentions `--answers FILE` alongside re-running interactively
+    * The "Still open" section points to `--answers` first and mentions that the `ts-scan-agent` CLI can also ask interactively, which is true whichever runtime produced the report
+    * An unsupported-ecosystem proposal now says "No existing issue found" only when the `gh` duplicate search actually ran. Otherwise (no `gh`, a `gh` error, or the bundled skill scripts, which never search) it says the search was skipped and prints the `gh issue list` command to run first. JSON gains `existing_issue_checked`
     * Inventory walks directories in sorted order, so reports no longer depend on filesystem listing order
 
 ### Fixed
-    * Answering "no" to a nested package ("belongs to its parent") left it in the report as a Module with its own `ts-scan` command, plus a note. It is now removed from the candidates and listed under a new "Folded into parent modules" section (and `folded_into_parent` in JSON), with no command
+    * Answering "no" to a nested package ("belongs to its parent") left it in the report as a Module with its own `ts-scan` command, plus a note. It is now removed from the candidates and listed under a new "Folded into parent modules" section (and `folded_into_parent` in JSON) with its ecosystem and no command
     * An answered question left Mapping's original rationale in place, e.g. a Dockerfile answered "module" still said "defaulting to Infrastructure Module", and a Linked Module answered "no" still advised linking it. The rationale now states what the user confirmed
+    * A `.gitignore` pattern that compiles to an invalid regex (e.g. the range `[z-a]`) crashed `analyze` and `scan_concept.py` with a traceback. It is now skipped, as git (and `scan_concept.mjs`) never match it
+    * A stdin object closed in-process no longer crashes the TTY check with `ValueError`; it counts as no TTY
 
 ### Notes
     * `tests/test_skill_scripts.py` runs the package and both bundled scripts on the same fixtures and requires identical reports, so the three can't drift silently. Other tests check that every flag in `SKILL.md` exists on the script, that the scripts use only built-in modules, and that `SKILL.md`, the scripts, `plugin.json` and `pyproject.toml` agree on the version

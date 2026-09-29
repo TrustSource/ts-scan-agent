@@ -205,8 +205,12 @@ def _load_gitignore(root):
     spec = []
     for line in lines:
         regex, include = _gitignore_pattern_to_regex(line)
-        if regex is not None:
+        if regex is None:
+            continue
+        try:
             spec.append((re.compile(regex), include))
+        except re.error:
+            pass  # A range like `[z-a]` never matches in git either - skip it, as the Node port does.
     return spec
 
 
@@ -525,6 +529,7 @@ def build_proposals(units):
             'title': f'Add ts-scan support for {ecosystem}',
             'body': body,
             'existing_issue': None,
+            'existing_issue_checked': False,
         })
     return proposals
 
@@ -540,7 +545,8 @@ class UsageFailure(Exception):
 
 
 def load_answers(value):
-    # Inline JSON (starts with "{") or a JSON file, like the package's --answers.
+    # Inline JSON (starts with "{") or a JSON file. Unlike the package's --answers there is no
+    # TOML: the standard library has no TOML parser before Python 3.11.
     if value.lstrip().startswith('{'):
         source = 'inline --answers JSON'
         try:
@@ -549,6 +555,11 @@ def load_answers(value):
             raise UsageFailure(f'Could not parse {source}: {err}')
     else:
         source = f'--answers file {value}'
+        if value.lower().endswith('.toml'):
+            raise UsageFailure(
+                f'{source}: TOML answers files need the full ts-scan-agent CLI. This script '
+                'reads JSON only - pass the answers as inline JSON or a .json file.'
+            )
         try:
             with open(value, encoding='utf-8') as fp:
                 data = json.load(fp)
@@ -625,7 +636,12 @@ def _resolve(concept, candidate, answer):
 
 
 def apply_answers(concept, answers):
-    pending = {c['path']: c for c in concept['candidates'] if c['open_question'] is not None}
+    # Several open candidates can share a path (e.g. pyproject.toml and package.json in one
+    # directory); they share its question, so the answer applies to all of them.
+    pending = {}
+    for c in concept['candidates']:
+        if c['open_question'] is not None:
+            pending.setdefault(c['path'], []).append(c)
     unknown = sorted(p for p in answers if p not in pending)
     if unknown:
         open_paths = ', '.join(f'"{p}"' for p in sorted(pending)) or 'none'
@@ -633,9 +649,9 @@ def apply_answers(concept, answers):
             '--answers names path(s) with no open question: '
             f'{", ".join(repr(p) for p in unknown)}. Open questions exist for: {open_paths}'
         )
-    parsed = {path: _parse_answer(pending[path], value) for path, value in answers.items()}
-    for path, answer in parsed.items():
-        _resolve(concept, pending[path], answer)
+    parsed = [(c, _parse_answer(c, value)) for path, value in answers.items() for c in pending[path]]
+    for candidate, answer in parsed:
+        _resolve(concept, candidate, answer)
 
 
 # --- Render (mirrors src/ts_scan_agent/render.py) --------------------------------------------
@@ -721,11 +737,17 @@ def _render_ecosystem_proposal(p, issue_repo, level):
     lines.append(f'- Found at: {", ".join(f"`{path}`" for path in p["manifest_paths"])}')
     title_arg = shlex.quote(p['title'])
     body_arg = shlex.quote(p['body'])
+    if not p['existing_issue_checked']:
+        lines.append(
+            f'- Not checked for an existing issue. Search first: '
+            f'`gh issue list --repo {issue_repo} --search {shlex.quote(p["ecosystem"])} --state all`'
+        )
     if level == 'expert':
         lines.append(f'  ```bash\n  gh issue create --repo {issue_repo} --title {title_arg} '
                      f'--body {body_arg} --label enhancement\n  ```')
         return '\n'.join(lines)
-    lines.append('- No existing issue found for this ecosystem.')
+    if p['existing_issue_checked']:
+        lines.append('- No existing issue found for this ecosystem.')
     lines.append('')
     lines.append(f'**Draft title:** {p["title"]}')
     lines.append('')
@@ -737,7 +759,8 @@ def _render_ecosystem_proposal(p, issue_repo, level):
         f'  gh issue create --repo {issue_repo} --title {title_arg} --body {body_arg} '
         f'--label enhancement\n'
         f'  ```\n'
-        f'  or re-run with `--file-issues` to be walked through review + filing.'
+        f'  or re-run the `ts-scan-agent` CLI with `--file-issues` to be walked through '
+        f'review + filing.'
     )
     return '\n'.join(lines)
 
@@ -778,8 +801,8 @@ def render_markdown(concept, units, issue_repo, level):
                 'own:'
             )
             lines.append('')
-        for f in sorted(concept['folded_into_parent'], key=lambda f: f['path']):
-            lines.append(f'- `{f["path"]}` - {f["name"]}')
+        for f in sorted(concept['folded_into_parent'], key=lambda f: (f['path'], f['ecosystem'] or '')):
+            lines.append(f'- `{f["path"]}` - {f["name"]}' + (f' ({f["ecosystem"]})' if f['ecosystem'] else ''))
         lines.append('')
 
     open_questions = [c for c in concept['candidates'] if c['open_question'] is not None]
@@ -792,8 +815,8 @@ def render_markdown(concept, units, issue_repo, level):
         else:
             lines.append(
                 'The following items could not be classified with confidence and were not '
-                'resolved (re-run interactively, or pass `--answers FILE` mapping each path '
-                'below to its answer, to resolve them):'
+                'resolved (pass `--answers` mapping each path below to its answer to resolve '
+                'them; the `ts-scan-agent` CLI can also ask them interactively):'
             )
             lines.append('')
             for c in open_questions:

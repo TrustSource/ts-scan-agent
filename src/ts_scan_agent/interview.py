@@ -164,9 +164,13 @@ def apply_answers(concept: ScanConcept, answers: t.Dict[str, t.Any]) -> None:
     """Non-interactive counterpart to run_interview(): resolves open questions from a
     path -> answer map (e.g. collected by a coding agent in chat). Validates every entry
     before changing anything, so a bad file never leaves the concept half-applied. Open
-    questions without an answer stay open and show up under "Still open"."""
+    questions without an answer stay open and show up under "Still open". One directory can
+    hold several open candidates (e.g. pyproject.toml and package.json side by side); they
+    share the same question about that path, so its answer applies to all of them."""
 
-    pending = {c.path: c for c in concept.low_confidence_candidates}
+    pending: t.Dict[str, t.List[Candidate]] = {}
+    for c in concept.low_confidence_candidates:
+        pending.setdefault(c.path, []).append(c)
 
     unknown = sorted(path for path in answers if path not in pending)
     if unknown:
@@ -176,6 +180,6 @@ def apply_answers(concept: ScanConcept, answers: t.Dict[str, t.Any]) -> None:
             f'{", ".join(repr(p) for p in unknown)}. Open questions exist for: {open_paths}'
         )
 
-    parsed = {path: _parse_answer(pending[path], value) for path, value in answers.items()}
-    for path, answer in parsed.items():
-        _resolve(concept, pending[path], answer)
+    parsed = [(c, _parse_answer(c, value)) for path, value in answers.items() for c in pending[path]]
+    for candidate, answer in parsed:
+        _resolve(concept, candidate, answer)

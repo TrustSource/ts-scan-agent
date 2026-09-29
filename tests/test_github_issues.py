@@ -31,7 +31,7 @@ def test_find_similar_issues_parses_gh_output(monkeypatch):
     assert '--search' in captured['args'] and 'Flutter' in captured['args']
 
 
-def test_find_similar_issues_degrades_to_empty_list_when_gh_missing(monkeypatch):
+def test_find_similar_issues_degrades_to_none_when_gh_missing(monkeypatch):
     def fake_run(args, **kwargs):
         raise FileNotFoundError('gh not found')
 
@@ -40,10 +40,10 @@ def test_find_similar_issues_degrades_to_empty_list_when_gh_missing(monkeypatch)
     with pytest.warns(UserWarning):
         result = github_issues.find_similar_issues('trustsource/ts-scan', 'PHP')
 
-    assert result == []
+    assert result is None
 
 
-def test_find_similar_issues_degrades_to_empty_list_on_nonzero_exit(monkeypatch):
+def test_find_similar_issues_degrades_to_none_on_nonzero_exit(monkeypatch):
     def fake_run(args, **kwargs):
         return FakeCompletedProcess(returncode=1, stderr='not authenticated')
 
@@ -52,7 +52,7 @@ def test_find_similar_issues_degrades_to_empty_list_on_nonzero_exit(monkeypatch)
     with pytest.warns(UserWarning):
         result = github_issues.find_similar_issues('trustsource/ts-scan', 'PHP')
 
-    assert result == []
+    assert result is None
 
 
 def test_file_issue_returns_url_on_success(monkeypatch):

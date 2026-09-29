@@ -99,6 +99,12 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
         )
         return '\n'.join(lines)
 
+    if not p.existing_issue_checked:
+        lines.append(
+            f'- Not checked for an existing issue. Search first: '
+            f'`gh issue list --repo {issue_repo} --search {shlex.quote(p.ecosystem)} --state all`'
+        )
+
     if level == 'expert':
         title_arg = shlex.quote(p.title)
         body_arg = shlex.quote(p.body)
@@ -106,7 +112,8 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
                       f'--body {body_arg} --label enhancement\n  ```')
         return '\n'.join(lines)
 
-    lines.append('- No existing issue found for this ecosystem.')
+    if p.existing_issue_checked:
+        lines.append('- No existing issue found for this ecosystem.')
     lines.append('')
     lines.append(f'**Draft title:** {p.title}')
     lines.append('')
@@ -120,7 +127,8 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
         f'  gh issue create --repo {issue_repo} --title {title_arg} --body {body_arg} '
         f'--label enhancement\n'
         f'  ```\n'
-        f'  or re-run with `--file-issues` to be walked through review + filing.'
+        f'  or re-run the `ts-scan-agent` CLI with `--file-issues` to be walked through '
+        f'review + filing.'
     )
     return '\n'.join(lines)
 
@@ -172,8 +180,8 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
                 'own:'
             )
             lines.append('')
-        for f in sorted(concept.folded_into_parent, key=lambda f: f.path):
-            lines.append(f'- `{f.path}` - {f.name}')
+        for f in sorted(concept.folded_into_parent, key=lambda f: (f.path, f.ecosystem or '')):
+            lines.append(f'- `{f.path}` - {f.name}' + (f' ({f.ecosystem})' if f.ecosystem else ''))
         lines.append('')
 
     open_questions = concept.low_confidence_candidates
@@ -186,8 +194,8 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
         else:
             lines.append(
                 'The following items could not be classified with confidence and were not '
-                'resolved (re-run interactively, or pass `--answers FILE` mapping each path '
-                'below to its answer, to resolve them):'
+                'resolved (pass `--answers` mapping each path below to its answer to resolve '
+                'them; the `ts-scan-agent` CLI can also ask them interactively):'
             )
             lines.append('')
             for c in open_questions:

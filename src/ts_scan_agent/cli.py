@@ -142,6 +142,7 @@ def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
         concept.ecosystem_proposals = build_proposals(units, llm=llm_client)
         for proposal in concept.ecosystem_proposals:
             results = find_similar_issues(issue_repo, proposal.ecosystem)
+            proposal.existing_issue_checked = results is not None
             if results:
                 proposal.existing_issue = ExistingIssueRef(**results[0])
 
@@ -168,7 +169,11 @@ def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
 
 
 def _stdin_is_tty() -> bool:
-    return sys.stdin is not None and sys.stdin.isatty()
+    # A stdin object closed in-process (by an embedding wrapper) raises ValueError on isatty().
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except (ValueError, AttributeError):
+        return False
 
 
 _TITLE_LINE_RE = re.compile(r'^\s*Title:\s*(.*)$')

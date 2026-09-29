@@ -526,6 +526,7 @@ function buildProposals(units) {
       title: `Add ts-scan support for ${ecosystem}`,
       body,
       existing_issue: null,
+      existing_issue_checked: false,
     });
   }
   return proposals;
@@ -559,6 +560,13 @@ function loadAnswers(value) {
     }
   } else {
     source = `--answers file ${value}`;
+    // No TOML here (no built-in parser); the package's --answers also reads .toml.
+    if (value.toLowerCase().endsWith('.toml')) {
+      throw new UsageFailure(
+        `${source}: TOML answers files need the full ts-scan-agent CLI. This script `
+        + 'reads JSON only - pass the answers as inline JSON or a .json file.',
+      );
+    }
     try {
       data = JSON.parse(fs.readFileSync(value, 'utf8'));
     } catch (err) {
@@ -623,7 +631,14 @@ function resolve(concept, c, answer) {
 }
 
 function applyAnswers(concept, answers) {
-  const pending = new Map(concept.candidates.filter((c) => c.open_question !== null).map((c) => [c.path, c]));
+  // Several open candidates can share a path (e.g. pyproject.toml and package.json in one
+  // directory); they share its question, so the answer applies to all of them.
+  const pending = new Map();
+  for (const c of concept.candidates) {
+    if (c.open_question === null) continue;
+    if (!pending.has(c.path)) pending.set(c.path, []);
+    pending.get(c.path).push(c);
+  }
   const unknown = Object.keys(answers).filter((p) => !pending.has(p)).sort();
   if (unknown.length) {
     const openPaths = [...pending.keys()].sort().map((p) => `"${p}"`).join(', ') || 'none';
@@ -632,8 +647,8 @@ function applyAnswers(concept, answers) {
       + `${unknown.map(pyRepr).join(', ')}. Open questions exist for: ${openPaths}`,
     );
   }
-  const parsed = Object.entries(answers).map(([p, v]) => [p, parseAnswer(pending.get(p), v)]);
-  for (const [p, answer] of parsed) resolve(concept, pending.get(p), answer);
+  const parsed = Object.entries(answers).flatMap(([p, v]) => pending.get(p).map((c) => [c, parseAnswer(c, v)]));
+  for (const [c, answer] of parsed) resolve(concept, c, answer);
 }
 
 // --- Render (mirrors src/ts_scan_agent/render.py) --------------------------------------------
@@ -721,12 +736,18 @@ function renderEcosystemProposal(p, issueRepo, level) {
   lines.push(`- Found at: ${p.manifest_paths.map((x) => `\`${x}\``).join(', ')}`);
   const titleArg = shellQuote(p.title);
   const bodyArg = shellQuote(p.body);
+  if (!p.existing_issue_checked) {
+    lines.push(
+      '- Not checked for an existing issue. Search first: '
+      + `\`gh issue list --repo ${issueRepo} --search ${shellQuote(p.ecosystem)} --state all\``,
+    );
+  }
   if (level === 'expert') {
     lines.push(`  \`\`\`bash\n  gh issue create --repo ${issueRepo} --title ${titleArg} `
       + `--body ${bodyArg} --label enhancement\n  \`\`\``);
     return lines.join('\n');
   }
-  lines.push('- No existing issue found for this ecosystem.');
+  if (p.existing_issue_checked) lines.push('- No existing issue found for this ecosystem.');
   lines.push('');
   lines.push(`**Draft title:** ${p.title}`);
   lines.push('');
@@ -738,7 +759,8 @@ function renderEcosystemProposal(p, issueRepo, level) {
     + `  gh issue create --repo ${issueRepo} --title ${titleArg} --body ${bodyArg} `
     + '--label enhancement\n'
     + '  ```\n'
-    + '  or re-run with `--file-issues` to be walked through review + filing.',
+    + '  or re-run the `ts-scan-agent` CLI with `--file-issues` to be walked through '
+    + 'review + filing.',
   );
   return lines.join('\n');
 }
@@ -777,8 +799,10 @@ function renderMarkdown(concept, units, issueRepo, level) {
       lines.push('You said these belong to their parent module, so they get no scan of their own:');
       lines.push('');
     }
-    const folded = [...concept.folded_into_parent].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    for (const f of folded) lines.push(`- \`${f.path}\` - ${f.name}`);
+    const key = (f) => [f.path, f.ecosystem || ''];
+    const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    const folded = [...concept.folded_into_parent].sort((a, b) => cmp(key(a)[0], key(b)[0]) || cmp(key(a)[1], key(b)[1]));
+    for (const f of folded) lines.push(`- \`${f.path}\` - ${f.name}${f.ecosystem ? ` (${f.ecosystem})` : ''}`);
     lines.push('');
   }
 
@@ -791,8 +815,8 @@ function renderMarkdown(concept, units, issueRepo, level) {
     } else {
       lines.push(
         'The following items could not be classified with confidence and were not '
-        + 'resolved (re-run interactively, or pass `--answers FILE` mapping each path '
-        + 'below to its answer, to resolve them):',
+        + 'resolved (pass `--answers` mapping each path below to its answer to resolve '
+        + 'them; the `ts-scan-agent` CLI can also ask them interactively):',
       );
       lines.push('');
       for (const c of openQuestions) lines.push(`- \`${c.path}\` — ${c.open_question}`);

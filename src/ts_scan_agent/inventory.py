@@ -1,4 +1,5 @@
 import os
+import re
 import typing as t
 
 from pathlib import Path
@@ -91,7 +92,16 @@ def _load_gitignore_spec(root: Path) -> t.Optional[pathspec.PathSpec]:
     except OSError:
         return None
 
-    return pathspec.PathSpec.from_lines('gitwildmatch', lines)
+    # A pattern that compiles to an invalid regex (e.g. the range `[z-a]`) can never match in
+    # git either, so skip it instead of aborting the whole walk.
+    valid = []
+    for line in lines:
+        try:
+            pathspec.PathSpec.from_lines('gitwildmatch', [line])
+        except re.error:
+            continue
+        valid.append(line)
+    return pathspec.PathSpec.from_lines('gitwildmatch', valid)
 
 
 def _has_npm_workspaces(package_json: Path) -> bool:

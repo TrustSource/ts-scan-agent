@@ -75,6 +75,7 @@ def _mixed_fixture(root: Path) -> None:
         '!keep.log',
         'secret?.txt',
         '[Tt]emp/',
+        '[z-a]',
         '',
     ]))
     _write(root, 'go.mod', 'module example.com/x\n')
@@ -319,3 +320,38 @@ def test_unreadable_answers_fail(runner, tmp_path: Path, value, message):
 
     assert result.returncode == 1
     assert message in result.stderr
+
+
+@pytest.mark.parametrize('runner', RUNNERS)
+def test_toml_answers_file_fails_with_a_clear_message(runner, tmp_path: Path):
+    root = tmp_path / 'issue-repo'
+    root.mkdir()
+    _issue_fixture(root)
+    answers_file = tmp_path / 'answers.toml'
+    answers_file.write_text('"tools/helper" = "yes"\n')
+
+    result = _run(runner, root, '--answers', str(answers_file))
+
+    assert result.returncode == 1
+    assert 'reads JSON only' in result.stderr
+
+
+@pytest.mark.parametrize('runner', RUNNERS)
+@pytest.mark.parametrize('answer', ['yes', 'no'])
+def test_answer_applies_to_every_open_candidate_at_the_path(runner, tmp_path: Path, answer):
+    # Two manifests in one nested directory: two open candidates with the same path.
+    root = tmp_path / 'dup-repo'
+    _write(root, 'pyproject.toml', '[project]\nname = "root"\n')
+    _write(root, 'sub/package.json', '{"name": "sub"}')
+    _write(root, 'sub/pyproject.toml', '[project]\nname = "sub"\n')
+    answers = {'sub': answer}
+    concept, units = _package_concept(root, answers=answers)
+    assert not concept.low_confidence_candidates
+    assert len(concept.folded_into_parent) == (2 if answer == 'no' else 0)
+
+    md = _run(runner, root, '--answers', json.dumps(answers), '--level', 'intermediate')
+    js = _run(runner, root, '--answers', json.dumps(answers), '--format', 'json')
+
+    assert md.returncode == 0, md.stderr
+    assert md.stdout == render_markdown(concept, units, level='intermediate') + '\n'
+    assert json.loads(js.stdout) == json.loads(render_json(concept))

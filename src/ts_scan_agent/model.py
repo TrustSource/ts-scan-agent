@@ -58,6 +58,9 @@ class EcosystemProposal(BaseModel):
     title: str
     body: str
     existing_issue: t.Optional[ExistingIssueRef] = None
+    # False when no duplicate search ran (gh missing/failing, or the bundled skill scripts,
+    # which never search) - the report then says so instead of "no existing issue found".
+    existing_issue_checked: bool = False
 
 
 class ScanConcept(BaseModel):
