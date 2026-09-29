@@ -6,6 +6,8 @@ from .model import ScanConcept, Candidate, DetectedUnit, EcosystemProposal
 Level = t.Literal['beginner', 'intermediate', 'expert']
 LEVEL_CHOICES: t.Tuple[Level, ...] = ('beginner', 'intermediate', 'expert')
 
+FORMAT_CHOICES = ('markdown', 'json')
+
 _SECTION_TITLES = {
     'module': 'Modules',
     'infrastructure_module': 'Infrastructure Modules',
@@ -123,6 +125,13 @@ def _render_ecosystem_proposal(p: EcosystemProposal, issue_repo: str, level: Lev
     return '\n'.join(lines)
 
 
+def render_json(concept: ScanConcept) -> str:
+    """The ScanConcept as JSON, for scripts and coding agents (ADR-004's planned additive
+    export). Same data the Markdown report is built from - `ts_scan_command` values are the
+    exact strings Markdown shows, so a consumer must copy them verbatim (ADR-007)."""
+    return concept.model_dump_json(indent=2)
+
+
 def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
                      issue_repo: str = 'trustsource/ts-scan', level: Level = 'intermediate') -> str:
     lines = [f'# TrustSource Scan Concept: {concept.project_name}', '', f'Generated for `{concept.source_path}`.', '']
@@ -154,6 +163,19 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
             lines.append(_render_candidate(c, level))
             lines.append('')
 
+    if concept.folded_into_parent:
+        lines.append('## Folded into parent modules')
+        lines.append('')
+        if level != 'expert':
+            lines.append(
+                'You said these belong to their parent module, so they get no scan of their '
+                'own:'
+            )
+            lines.append('')
+        for f in sorted(concept.folded_into_parent, key=lambda f: f.path):
+            lines.append(f'- `{f.path}` - {f.name}')
+        lines.append('')
+
     open_questions = concept.low_confidence_candidates
     if open_questions:
         lines.append('## Still open')
@@ -164,7 +186,8 @@ def render_markdown(concept: ScanConcept, detected_units: t.List[DetectedUnit],
         else:
             lines.append(
                 'The following items could not be classified with confidence and were not '
-                'resolved (re-run interactively to answer them):'
+                'resolved (re-run interactively, or pass `--answers FILE` mapping each path '
+                'below to its answer, to resolve them):'
             )
             lines.append('')
             for c in open_questions:

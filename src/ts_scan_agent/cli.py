@@ -1,4 +1,5 @@
 import re
+import sys
 import typing as t
 
 from pathlib import Path
@@ -8,8 +9,8 @@ import click
 from . import __version__
 from .inventory import scan_inventory
 from .mapping import build_candidates
-from .interview import run_interview
-from .render import render_markdown, Level, LEVEL_CHOICES
+from .interview import run_interview, load_answers, apply_answers
+from .render import render_markdown, render_json, Level, LEVEL_CHOICES, FORMAT_CHOICES
 from .model import ScanConcept, ExistingIssueRef
 from .llm import LLMClient, NullLLMClient
 from .ecosystem_proposals import build_proposals
@@ -78,7 +79,18 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
 @click.option('--anthropic-api-key', envvar='ANTHROPIC_API_KEY', required=False,
               help='Anthropic API key (or set ANTHROPIC_API_KEY)')
 @click.option('--non-interactive', is_flag=True, default=False,
-              help='Skip the interview step; unresolved items are listed under "Still open"')
+              help='Skip the interview step; unresolved items are listed under "Still open". '
+                   'Implied when stdin is not a terminal.')
+@click.option('--answers', required=False, metavar='FILE|JSON',
+              help='Map from candidate path to answer, applied instead of the interview: a '
+                   'JSON (or .toml) file, or an inline JSON object such as '
+                   '\'{"Dockerfile": "module"}\'. Answers are "module"/"infrastructure_module" '
+                   'for a Dockerfile, "yes"/"no" for everything else. Unanswered items stay '
+                   'under "Still open"; an unknown path or invalid value is an error.')
+@click.option('--format', type=click.Choice(FORMAT_CHOICES), default='markdown', show_default=True,
+              help='Report format. json dumps the scan concept (candidates, commands, open '
+                   'questions, ecosystem proposals) for scripts and coding agents; --level only '
+                   'affects markdown.')
 @click.option('--propose-issues/--no-propose-issues', default=True,
               help='Draft a ts-scan GitHub issue proposal for each unsupported ecosystem found '
                    '(local/text only - never filed without --file-issues)')
@@ -90,14 +102,29 @@ def _build_llm_client(backend: str, model: t.Optional[str], ollama_url: str,
                    'Ignored (with a warning) under --non-interactive - filing always requires '
                    'an interactive confirmation.')
 @click.option('-o', '--output', required=False, type=click.Path(path_type=Path),
-              help='Write the Markdown report here instead of printing it')
+              help='Write the report here instead of printing it')
 def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
             llm_model: t.Optional[str], ollama_url: str,
             anthropic_api_key: t.Optional[str], non_interactive: bool,
+            answers: t.Optional[str], format: str,
             propose_issues: bool, issue_repo: str, file_issues: bool,
             output: t.Optional[Path]):
     root = path.resolve()
     project_name = project or root.name
+
+    # Read --answers up front so a malformed file fails before any scanning work.
+    answer_map = load_answers(answers) if answers else None
+
+    if answer_map is not None:
+        non_interactive = True
+    elif not non_interactive and not _stdin_is_tty():
+        click.echo(
+            'Warning: stdin is not a terminal - running non-interactively. Unresolved items '
+            'are listed under "Still open"; pass --non-interactive to silence this, or '
+            '--answers FILE to resolve them.',
+            err=True,
+        )
+        non_interactive = True
 
     llm_client = _build_llm_client(llm, llm_model, ollama_url, anthropic_api_key)
 
@@ -107,6 +134,8 @@ def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
     candidates = build_candidates(project_name, root, units, llm=llm_client)
     concept = ScanConcept(project_name=project_name, source_path=str(root), candidates=candidates)
 
+    if answer_map is not None:
+        apply_answers(concept, answer_map)
     run_interview(concept, non_interactive=non_interactive)
 
     if propose_issues:
@@ -126,13 +155,20 @@ def analyze(path: Path, level: Level, project: t.Optional[str], llm: str,
         else:
             _review_and_file_issues(concept, issue_repo)
 
-    report = render_markdown(concept, units, issue_repo=issue_repo, level=level)
+    if format == 'json':
+        report = render_json(concept)
+    else:
+        report = render_markdown(concept, units, issue_repo=issue_repo, level=level)
 
     if output:
         output.write_text(report)
         click.echo(f'Wrote scan concept to {output}', err=True)
     else:
         click.echo(report)
+
+
+def _stdin_is_tty() -> bool:
+    return sys.stdin is not None and sys.stdin.isatty()
 
 
 _TITLE_LINE_RE = re.compile(r'^\s*Title:\s*(.*)$')
@@ -163,25 +199,25 @@ def _review_and_file_issues(concept: ScanConcept, issue_repo: str) -> None:
         if proposal.existing_issue:
             continue
 
-        click.echo(f'\n--- Draft proposal for {proposal.ecosystem} ---')
-        click.echo('Opening in your editor for review - save and close to continue.')
+        click.echo(f'\n--- Draft proposal for {proposal.ecosystem} ---', err=True)
+        click.echo('Opening in your editor for review - save and close to continue.', err=True)
 
         edited = click.edit(text=f'Title: {proposal.title}\n\n{proposal.body}')
         if edited is None:
-            click.echo('Skipped (editor closed without saving).')
+            click.echo('Skipped (editor closed without saving).', err=True)
             continue
 
         title, body = _parse_edited_proposal(edited)
         proposal.title = title or proposal.title
         proposal.body = body
 
-        click.echo(f'\nTitle: {proposal.title}\n\n{proposal.body}\n')
-        if not click.confirm(f'File this on {issue_repo}?', default=False):
-            click.echo('Skipped.')
+        click.echo(f'\nTitle: {proposal.title}\n\n{proposal.body}\n', err=True)
+        if not click.confirm(f'File this on {issue_repo}?', default=False, err=True):
+            click.echo('Skipped.', err=True)
             continue
 
         try:
             url = file_issue(issue_repo, proposal.title, proposal.body, labels=['enhancement'])
-            click.echo(f'Filed: {url}')
+            click.echo(f'Filed: {url}', err=True)
         except GitHubIssueError as err:
             click.echo(f'Failed to file issue: {err}', err=True)

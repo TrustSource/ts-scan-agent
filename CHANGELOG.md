@@ -3,6 +3,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-29
+
+Ships `ts-scan-agent` as a self-contained Agent Skill for Claude Code, GitHub Copilot and other coding agents ([#1](https://github.com/TrustSource/ts-scan-agent/issues/1), ARCHITECTURE.md ADR-010).
+
+### New Features
+    * `skills/ts-scan-agent/`: an [Agent Skills](https://agentskills.io) skill that works out the scan concept, asks the open questions in chat and shows the final report, with nothing to install. It bundles dependency-free ports of the pipeline, `scripts/scan_concept.py` (Python 3.8+ standard library) and `scripts/scan_concept.mjs` (Node.js 18+), and falls back to `references/manual.md` when neither runtime exists. It copies `ts-scan` commands verbatim and never files an issue or runs `ts-scan upload` without the user's confirmation
+    * Install by copying the folder into `.claude/skills/`, `.github/skills/`, `~/.copilot/skills/` and similar, or as a plugin via `.claude-plugin/plugin.json` and `marketplace.json` (`/plugin marketplace add TrustSource/ts-scan-agent`, then `/plugin install ts-scan-agent@trustsource`; Copilot CLI has `copilot plugin` equivalents)
+    * `--answers FILE|JSON`: a map from candidate path to answer, as a JSON (or `.toml`) file or inline JSON, applied instead of the interview. Unknown paths and invalid values exit non-zero
+    * `--format [markdown|json]`: `json` dumps the `ScanConcept`
+    * GitHub Actions workflow running the test suite on Python 3.10-3.12, plus the skill scripts on Python 3.8 and Node.js 18
+
+### Changed
+    * With no TTY on stdin (and neither `--non-interactive` nor `--answers`), `analyze` now falls back to non-interactive with a warning on stderr instead of aborting at the first prompt with no report
+    * Interview and `--file-issues` prompts now go to stderr, so stdout carries only the report
+    * The "Still open" section mentions `--answers FILE` alongside re-running interactively
+    * Inventory walks directories in sorted order, so reports no longer depend on filesystem listing order
+
+### Fixed
+    * Answering "no" to a nested package ("belongs to its parent") left it in the report as a Module with its own `ts-scan` command, plus a note. It is now removed from the candidates and listed under a new "Folded into parent modules" section (and `folded_into_parent` in JSON), with no command
+    * An answered question left Mapping's original rationale in place, e.g. a Dockerfile answered "module" still said "defaulting to Infrastructure Module", and a Linked Module answered "no" still advised linking it. The rationale now states what the user confirmed
+
+### Notes
+    * `tests/test_skill_scripts.py` runs the package and both bundled scripts on the same fixtures and requires identical reports, so the three can't drift silently. Other tests check that every flag in `SKILL.md` exists on the script, that the scripts use only built-in modules, and that `SKILL.md`, the scripts, `plugin.json` and `pyproject.toml` agree on the version
+
 ## [0.6.2] - 2026-08-26
 
 ### New Features
