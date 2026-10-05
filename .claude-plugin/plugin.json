@@ -1,7 +1,7 @@
 {
   "name": "ts-scan-agent",
   "description": "Proposes a TrustSource scan concept for a repository (Modules, Infrastructure Modules, Linked Modules) with the ts-scan command for each, asking open questions in chat.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "author": {
     "name": "EACG GmbH"
   },

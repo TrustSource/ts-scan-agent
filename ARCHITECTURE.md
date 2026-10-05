@@ -407,6 +407,18 @@ but it is real extra work per change. Manual mode is best-effort: it follows the
 but nothing tests an agent's hand-made report. `ScanConcept`'s field names are now a public
 contract for `--format json` consumers.
 
+**Update 2026-10-05 (v0.7.1) - the pre-approved scripts are read-only by construction.** The
+`allowed-tools` rule `Bash(python3 .../scan_concept.py analyze *)` is narrow in *what* it runs
+but admits *any* trailing arguments (the host cannot express "these flags only"). With the
+scripts' `-o/--output`, that pre-approval was an unprompted arbitrary-file-overwrite primitive
+for a prompt-injected agent, and the written report partly contains repo-controlled path
+names. Decision: the bundled scripts have no output flag and no side effects at all - stdout
+only; `tests/test_agent_skill.py` fails if either script gains a file write, process spawn,
+deletion or dynamic code execution, and `test_skill_scripts.py` asserts `-o`/`--output` is
+rejected. The full CLI keeps `-o` (it is not pre-approved). Rule for future changes: anything
+reachable through a pre-approved wildcard must be unable to cause side effects, whatever
+arguments it is given.
+
 ---
 
 ## Known limitations & pending upstream work

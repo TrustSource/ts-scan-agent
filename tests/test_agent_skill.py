@@ -56,6 +56,7 @@ def skill_text() -> str:
 
 def _script_module():
     spec = importlib.util.spec_from_file_location('scan_concept', SCRIPTS / 'scan_concept.py')
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     # No __pycache__ inside the skill folder - it gets copied verbatim into users' skill dirs.
     dont_write, sys.dont_write_bytecode = sys.dont_write_bytecode, True
@@ -138,6 +139,29 @@ def test_node_script_has_only_builtin_imports():
     source = (SCRIPTS / 'scan_concept.mjs').read_text()
     imports = set(re.findall(r"^import .* from '([^']+)';", source, re.MULTILINE))
     assert imports and all(i.startswith('node:') for i in imports), imports
+
+
+def test_bundled_scripts_can_never_write_or_run_anything():
+    # SKILL.md pre-approves both scripts with *any* trailing arguments, so the scripts themselves
+    # must be incapable of side effects: no file writes, no process spawning, no deletion. The
+    # import allow-list above doesn't cover this - `os` alone offers os.system/os.remove.
+    # Patterns target API *calls*, not words - the report prose legitimately says "rename it".
+    forbidden = {
+        'scan_concept.py': r"open\([^)]*mode\s*=\s*['\"][^'\"]*[wax+]|"
+                           r"open\([^,()]+,\s*['\"][^'\"]*[wax+][^'\"]*['\"]|"
+                           r"\.write_text\(|\.write_bytes\(|"
+                           r"\bos\.(system|popen|remove|unlink|rename|replace|rmdir|mkdir|makedirs|"
+                           r"exec\w*|spawn\w*|fork|kill)\(|"
+                           r"\bsubprocess\b|\bshutil\b|\btempfile\b|\beval\(|\bexec\(|__import__",
+        'scan_concept.mjs': r"\b(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|"
+                            r"unlink|unlinkSync|rmSync|rmdirSync|renameSync|mkdirSync|copyFileSync|"
+                            r"truncateSync|symlinkSync|chmodSync)\(|child_process|\beval\(|"
+                            r"new Function|\bimport\(|\brequire\(",
+    }
+    for name, pattern in forbidden.items():
+        source = (SCRIPTS / name).read_text()
+        hits = [m.group(0) for m in re.finditer(pattern, source)]
+        assert not hits, f'{name} must stay read-only and side-effect free, found: {hits}'
 
 
 def test_plugin_version_matches_pyproject():

@@ -4,7 +4,7 @@ description: Sets up TrustSource scanning for a repository. Proposes which parts
 license: Apache-2.0
 compatibility: Self-contained. Runs a bundled dependency-free script with Python 3.8+ or Node.js 18+ if either is present; otherwise the agent follows references/manual.md with its own file tools. No network access or package installs.
 metadata:
-  version: "0.7.0"
+  version: "0.7.1"
   homepage: https://github.com/TrustSource/ts-scan-agent
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/scan_concept.py analyze *) Bash(python ${CLAUDE_SKILL_DIR}/scripts/scan_concept.py analyze *) Bash(node ${CLAUDE_SKILL_DIR}/scripts/scan_concept.mjs analyze *)
 ---

@@ -18,7 +18,7 @@ from ts_scan_agent.mapping import build_candidates, _scan_command, _docker_scan_
 from ts_scan_agent.ecosystem_proposals import build_proposals
 from ts_scan_agent.interview import apply_answers, AnswersError
 from ts_scan_agent.model import ScanConcept
-from ts_scan_agent.render import render_markdown, render_json
+from ts_scan_agent.render import render_markdown, render_json, Level
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO_ROOT / 'skills' / 'ts-scan-agent' / 'scripts'
@@ -144,7 +144,7 @@ def _run(runner, root: Path, *args):
 
 @pytest.mark.parametrize('runner', RUNNERS)
 @pytest.mark.parametrize('level', ['beginner', 'intermediate', 'expert'])
-def test_markdown_matches_package_byte_for_byte(runner, repo: Path, level: str):
+def test_markdown_matches_package_byte_for_byte(runner, repo: Path, level: Level):
     concept, units = _package_concept(repo)
     expected = render_markdown(concept, units, level=level) + '\n'
 
@@ -268,18 +268,20 @@ def test_unknown_flag_is_rejected(runner, tmp_path: Path):
 
 
 @pytest.mark.parametrize('runner', RUNNERS)
-def test_output_file(runner, tmp_path: Path):
+@pytest.mark.parametrize('flag', ['-o', '--output'])
+def test_scripts_cannot_write_a_report_file(runner, flag, tmp_path: Path):
+    # SKILL.md pre-approves `<script> analyze *` - any trailing arguments. A script that accepted
+    # an output path would let a prompt-injected agent overwrite arbitrary files (e.g. ~/.zshrc)
+    # without a permission prompt, so stdout is the only output. The full CLI keeps -o.
     root = tmp_path / 'issue-repo'
     root.mkdir()
     _issue_fixture(root)
-    concept, units = _package_concept(root)
     out = tmp_path / 'report.md'
 
-    result = _run(runner, root, '-o', str(out))
+    result = _run(runner, root, flag, str(out))
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == ''
-    assert out.read_text(encoding='utf-8') == render_markdown(concept, units, level='beginner')
+    assert result.returncode == 2
+    assert not out.exists()
 
 
 def test_manual_mode_templates_match_mapping():

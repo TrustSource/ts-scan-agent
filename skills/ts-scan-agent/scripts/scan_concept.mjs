@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const VERSION = '0.7.0';
+const VERSION = '0.7.1';
 
 // --- Inventory (mirrors src/ts_scan_agent/inventory.py) -------------------------------------
 
@@ -869,14 +869,14 @@ function renderMarkdown(concept, units, issueRepo, level) {
 
 const USAGE = 'usage: scan_concept.mjs analyze PATH [--level {beginner,intermediate,expert}] '
   + '[--project NAME] [--answers FILE|JSON] [--format {markdown,json}] '
-  + '[--propose-issues | --no-propose-issues] [--issue-repo REPO] [-o FILE]';
+  + '[--propose-issues | --no-propose-issues] [--issue-repo REPO]';
 
 function parseArgs(argv) {
   if (argv[0] === '--version') return { version: true };
   if (argv[0] === '-h' || argv[0] === '--help') return { help: true };
   if (argv[0] !== 'analyze') throw new UsageFailure(USAGE);
 
-  const valued = { '--level': 'level', '--project': 'project', '--answers': 'answers', '--format': 'format', '--issue-repo': 'issueRepo', '--output': 'output', '-o': 'output' };
+  const valued = { '--level': 'level', '--project': 'project', '--answers': 'answers', '--format': 'format', '--issue-repo': 'issueRepo' };
   const opts = { level: 'beginner', format: 'markdown', proposeIssues: true, issueRepo: 'trustsource/ts-scan' };
   const positional = [];
   for (let i = 1; i < argv.length; i += 1) {
@@ -948,12 +948,9 @@ function main(argv) {
     ? JSON.stringify(concept, null, 2)
     : renderMarkdown(concept, units, args.issueRepo, args.level);
 
-  if (args.output) {
-    fs.writeFileSync(args.output, report, 'utf8');
-    process.stderr.write(`Wrote scan concept to ${args.output}\n`);
-  } else {
-    process.stdout.write(`${report}\n`);
-  }
+  // No --output: SKILL.md pre-approves this script with any trailing arguments, so it must be
+  // unable to write anywhere - the report goes to stdout only (tests/test_agent_skill.py).
+  process.stdout.write(`${report}\n`);
   return 0;
 }
 

@@ -20,7 +20,7 @@ import re
 import shlex
 import sys
 
-VERSION = '0.7.0'
+VERSION = '0.7.1'
 
 # --- Inventory (mirrors src/ts_scan_agent/inventory.py) -------------------------------------
 
@@ -886,7 +886,6 @@ def build_parser():
     analyze.add_argument('--propose-issues', dest='propose_issues', action='store_true', default=True)
     analyze.add_argument('--no-propose-issues', dest='propose_issues', action='store_false')
     analyze.add_argument('--issue-repo', default='trustsource/ts-scan')
-    analyze.add_argument('-o', '--output')
     return parser
 
 
@@ -930,12 +929,9 @@ def main(argv=None):
     else:
         report = render_markdown(concept, units, args.issue_repo, args.level)
 
-    if args.output:
-        with open(args.output, 'w', encoding='utf-8') as fp:
-            fp.write(report)
-        print(f'Wrote scan concept to {args.output}', file=sys.stderr)
-    else:
-        sys.stdout.write(report + '\n')
+    # No --output: SKILL.md pre-approves this script with any trailing arguments, so it must be
+    # unable to write anywhere - the report goes to stdout only (tests/test_agent_skill.py).
+    sys.stdout.write(report + '\n')
     return 0
 
 

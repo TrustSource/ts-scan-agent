@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-10-05
+
+Hardening follow-up from the review of the 0.7.0 skill PR ([#2](https://github.com/TrustSource/ts-scan-agent/pull/2)).
+
+### Security
+    * The bundled skill scripts (`scan_concept.py`, `scan_concept.mjs`) no longer accept `-o/--output`. `SKILL.md` pre-approves `<script> analyze *`, i.e. any trailing arguments, so a script that could write a file let a prompt-injected agent overwrite arbitrary files (e.g. `~/.zshrc`) without a permission prompt; report text partly contains repo-controlled path names. The scripts now print to stdout only and are covered by a test that forbids any file write, process spawn, deletion or dynamic code execution in them. The full `ts-scan-agent` CLI keeps `-o`
+    * CI workflow declares `permissions: contents: read` (it needs nothing else)
+
+### Fixed
+    * Four Pyright errors in the new skill tests (optional `importlib` spec, `str` passed as report `Level`); `pyright src tests` is clean again
+
+### Notes
+    * Not done, worth a follow-up: pin the workflow's actions by commit SHA, add a Pyright step to CI (the four errors above got through because CI only runs pytest), and cut a tagged release so the skill can be pinned to a version (#1 asked for tags)
+
 ## [0.7.0] - 2026-09-29
 
 Ships `ts-scan-agent` as a self-contained Agent Skill for Claude Code, GitHub Copilot and other coding agents ([#1](https://github.com/TrustSource/ts-scan-agent/issues/1), ARCHITECTURE.md ADR-010).
