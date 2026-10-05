@@ -8,7 +8,8 @@ which parts of the repo should become TrustSource **Modules**, **Infrastructure 
 run for each — so you don't have to work that out by hand, and don't have to trust an LLM to
 get the actual commands right (see [How it works](#how-it-works)).
 
-v1 produces a readable Markdown report you review yourself. It does not (yet) generate runnable
+It produces a readable Markdown report you review yourself (or JSON, for scripts and coding
+agents - see [Use it from your coding agent](#use-it-from-your-coding-agent)). It does not (yet) generate runnable
 CI scripts, and it does not touch your TrustSource account — see
 [ARCHITECTURE.md](ARCHITECTURE.md) for the full design and the reasoning behind it (including
 what's deliberately out of scope for now).
@@ -104,7 +105,75 @@ ts-scan-agent analyze . --llm anthropic --anthropic-api-key sk-...
 
 # Give the TrustSource project a specific name (defaults to the directory name)
 ts-scan-agent analyze . --project my-product
+
+# Answer the open questions without the interview (inline JSON or a file), get JSON back
+ts-scan-agent analyze . --llm none --answers '{"Dockerfile": "module"}' --format json
 ```
+
+When stdin isn't a terminal (CI, a pipe, a coding agent's shell), the interview is skipped
+automatically with a warning on stderr, and unresolved items land under "Still open". Interview
+prompts always go to stderr, so stdout only ever carries the report.
+
+## Use it from your coding agent
+
+The repo ships an [Agent Skill](https://agentskills.io) at
+[`skills/ts-scan-agent/`](skills/ts-scan-agent/SKILL.md). Copy that folder into your agent's
+skills directory and ask something like *"set up TrustSource scanning for this repo"*. The agent
+works out the scan concept, asks you the open questions in chat, and shows you the final
+report. It copies every `ts-scan` command verbatim and never files a GitHub issue or runs
+`ts-scan upload` without your confirmation.
+
+**Nothing to install.** The skill doesn't need this package, pip, uv or network access. It
+bundles a dependency-free port of the pipeline and runs whichever runtime the machine has:
+
+1. `scripts/scan_concept.py` with Python 3.8+ (standard library only), or
+2. `scripts/scan_concept.mjs` with Node.js 18+ (built-in modules only), or
+3. neither: the agent follows [`references/manual.md`](skills/ts-scan-agent/references/manual.md)
+   with its own file tools.
+
+Both scripts produce the same report as `ts-scan-agent analyze --llm none`, byte for byte:
+`tests/test_skill_scripts.py` runs all three on the same fixtures. The skill leaves the LLM
+judgment calls to the agent that is already talking to you.
+
+**Install by copying the folder** into a skills directory your agent reads:
+
+| Agent | Per repository | Personal (all repos) |
+|---|---|---|
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+| GitHub Copilot (VS Code, CLI, coding agent) | `.github/skills/`, `.claude/skills/` or `.agents/skills/` | `~/.copilot/skills/` or `~/.agents/skills/` |
+| Other Agent Skills-compatible agents (Codex, Cursor, Gemini CLI, ...) | see your agent's docs; many read `.agents/skills/` | see your agent's docs; many read `~/.agents/skills/` |
+
+```bash
+git clone --depth 1 https://github.com/TrustSource/ts-scan-agent.git /tmp/ts-scan-agent
+mkdir -p .github/skills && cp -r /tmp/ts-scan-agent/skills/ts-scan-agent .github/skills/
+```
+
+Committing the folder to your repo (for example under `.github/skills/`) gives everyone on the
+team the skill, in Claude Code and Copilot alike.
+
+**Or install it as a plugin**, which also keeps it updated. Claude Code:
+
+```
+/plugin marketplace add TrustSource/ts-scan-agent
+/plugin install ts-scan-agent@trustsource
+```
+
+GitHub Copilot CLI reads the same marketplace file:
+
+```bash
+copilot plugin marketplace add TrustSource/ts-scan-agent
+copilot plugin install ts-scan-agent@trustsource
+```
+
+The skill's frontmatter sticks to the fields the Agent Skills spec defines, so it loads the same
+way everywhere. `allowed-tools` (honored by some agents, such as Claude Code) pre-approves only
+the bundled `scan_concept` script's `analyze` command.
+
+Without the skill, any agent can drive the CLI the same way: run
+`ts-scan-agent analyze . --llm none --non-interactive --format json`, ask the user each
+candidate's `open_question`, and re-run with the answers keyed by candidate `path`
+(`"module"`/`"infrastructure_module"` for a Dockerfile, `"yes"`/`"no"` otherwise), either inline
+(`--answers '{"Dockerfile": "module"}'`) or as a file.
 
 ## How much explanation you want: `--level`
 
@@ -186,11 +255,13 @@ ts-scan-agent [--config PATH] analyze PATH [OPTIONS]
 | `--llm-model TEXT` | backend-specific | Override the default model |
 | `--ollama-url TEXT` | `http://localhost:11434` | Base URL of the local Ollama server |
 | `--anthropic-api-key TEXT` | `$ANTHROPIC_API_KEY` | Anthropic API key |
-| `--non-interactive` | off | Skip the interview; unresolved items are listed under "Still open" |
+| `--non-interactive` | off | Skip the interview; unresolved items are listed under "Still open". Implied (with a warning) when stdin is not a terminal |
+| `--answers FILE\|JSON` | - | Map from candidate path to answer, as a JSON (or `.toml`) file or an inline JSON object, applied instead of the interview: `module`/`infrastructure_module` for a Dockerfile, `yes`/`no` otherwise. Unknown paths and invalid values are errors |
+| `--format [markdown\|json]` | `markdown` | `json` dumps the scan concept (candidates with `path`, `candidate_type`, `confidence`, `rationale`, `open_question`, `ts_scan_command`, `warnings`, plus `ecosystem_proposals`). `--level` only affects Markdown |
 | `--propose-issues / --no-propose-issues` | on | Draft a GitHub issue proposal per unsupported ecosystem found |
 | `--issue-repo TEXT` | `trustsource/ts-scan` | Repository ecosystem-support proposals target |
 | `--file-issues` | off | Review/edit/confirm each drafted proposal, then file it on GitHub |
-| `-o, --output PATH` | stdout | Write the Markdown report here instead of printing it |
+| `-o, --output PATH` | stdout | Write the report here instead of printing it |
 
 `ts-scan-agent --version` prints the installed version.
 

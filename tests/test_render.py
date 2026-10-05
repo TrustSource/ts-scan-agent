@@ -1,4 +1,4 @@
-from ts_scan_agent.model import ScanConcept, Candidate, DetectedUnit
+from ts_scan_agent.model import ScanConcept, Candidate, DetectedUnit, EcosystemProposal
 from ts_scan_agent.render import render_markdown
 
 
@@ -116,3 +116,25 @@ def test_intermediate_is_the_default_level():
 
     assert default_report == explicit_report
     assert 'Getting started' not in default_report
+
+
+def _proposal_concept(checked: bool) -> ScanConcept:
+    return ScanConcept(project_name='x', source_path='/x', ecosystem_proposals=[EcosystemProposal(
+        ecosystem='PHP', manifest_paths=['composer.json'], title='Add ts-scan support for PHP',
+        body='body', existing_issue_checked=checked,
+    )])
+
+
+def test_proposal_says_no_existing_issue_only_after_a_search():
+    md = render_markdown(_proposal_concept(checked=True), [])
+
+    assert 'No existing issue found' in md
+    assert 'Not checked for an existing issue' not in md
+
+
+def test_proposal_without_a_search_says_so_and_how_to_search():
+    for level in ('intermediate', 'expert'):
+        md = render_markdown(_proposal_concept(checked=False), [], level=level)
+
+        assert 'No existing issue found' not in md
+        assert 'gh issue list --repo trustsource/ts-scan --search PHP --state all' in md

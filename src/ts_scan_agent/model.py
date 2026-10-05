@@ -28,6 +28,16 @@ class Candidate(BaseModel):
     warnings: t.List[str] = Field(default_factory=list)
 
 
+class FoldedCandidate(BaseModel):
+    """A nested package the user said belongs to its parent module (interview or --answers
+    "no"). It gets no scan of its own, so it carries no ts_scan_command - the report lists it
+    only so the decision stays visible."""
+
+    name: str
+    path: str
+    ecosystem: t.Optional[str] = None
+
+
 class ExistingIssueRef(BaseModel):
     """A pre-existing GitHub issue found while checking for duplicates before drafting an
     EcosystemProposal - if set, the proposal should not be filed as a new issue."""
@@ -48,6 +58,9 @@ class EcosystemProposal(BaseModel):
     title: str
     body: str
     existing_issue: t.Optional[ExistingIssueRef] = None
+    # False when no duplicate search ran (gh missing/failing, or the bundled skill scripts,
+    # which never search) - the report then says so instead of "no existing issue found".
+    existing_issue_checked: bool = False
 
 
 class ScanConcept(BaseModel):
@@ -57,6 +70,7 @@ class ScanConcept(BaseModel):
     project_name: str
     source_path: str
     candidates: t.List[Candidate] = Field(default_factory=list)
+    folded_into_parent: t.List[FoldedCandidate] = Field(default_factory=list)
     ecosystem_proposals: t.List[EcosystemProposal] = Field(default_factory=list)
 
     @property

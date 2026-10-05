@@ -1,0 +1,15 @@
+{
+  "name": "trustsource",
+  "description": "TrustSource plugins for coding agents",
+  "owner": {
+    "name": "EACG GmbH",
+    "url": "https://github.com/TrustSource"
+  },
+  "plugins": [
+    {
+      "name": "ts-scan-agent",
+      "source": ".",
+      "description": "Set up TrustSource scanning for a repository: proposes Modules, Infrastructure Modules and Linked Modules with the ts-scan command for each."
+    }
+  ]
+}

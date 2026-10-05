@@ -1,4 +1,5 @@
 import os
+import re
 import typing as t
 
 from pathlib import Path
@@ -91,7 +92,16 @@ def _load_gitignore_spec(root: Path) -> t.Optional[pathspec.PathSpec]:
     except OSError:
         return None
 
-    return pathspec.PathSpec.from_lines('gitwildmatch', lines)
+    # A pattern that compiles to an invalid regex (e.g. the range `[z-a]`) can never match in
+    # git either, so skip it instead of aborting the whole walk.
+    valid = []
+    for line in lines:
+        try:
+            pathspec.PathSpec.from_lines('gitwildmatch', [line])
+        except re.error:
+            continue
+        valid.append(line)
+    return pathspec.PathSpec.from_lines('gitwildmatch', valid)
 
 
 def _has_npm_workspaces(package_json: Path) -> bool:
@@ -121,7 +131,10 @@ def scan_inventory(root: Path, max_depth: int = MAX_DEPTH) -> t.List[DetectedUni
         current = Path(dirpath)
         depth = len(current.relative_to(root).parts)
 
-        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS]
+        # Sorted so the report doesn't depend on filesystem listing order - the skill's bundled
+        # scripts (skills/ts-scan-agent/scripts/) walk the same way and must match byte for byte.
+        dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS)
+        filenames = sorted(filenames)
 
         if gitignore_spec is not None:
             dirnames[:] = [
@@ -190,13 +203,13 @@ def scan_inventory(root: Path, max_depth: int = MAX_DEPTH) -> t.List[DetectedUni
 
         if current.name == '.github' and 'workflows' in dirnames:
             workflows_dir = current / 'workflows'
-            for wf in workflows_dir.glob('*.yml'):
+            for wf in sorted(workflows_dir.glob('*.yml')):
                 units.append(DetectedUnit(
                     path=str(wf.relative_to(root)),
                     kind='ci_config',
                     evidence='GitHub Actions workflow found',
                 ))
-            for wf in workflows_dir.glob('*.yaml'):
+            for wf in sorted(workflows_dir.glob('*.yaml')):
                 units.append(DetectedUnit(
                     path=str(wf.relative_to(root)),
                     kind='ci_config',

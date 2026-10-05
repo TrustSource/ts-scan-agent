@@ -30,12 +30,12 @@ repo path
       │ confidence + rationale, and an open_question if unresolved
       ▼
 ┌─────────────┐   CLI prompts over just the low-confidence candidates
-│  Interview  │
+│  Interview  │   (or answers from --answers FILE, e.g. collected by a coding agent)
 └─────┬───────┘
       │ ScanConcept (resolved)
       ▼
 ┌─────────────┐
-│   Render    │   → Markdown report
+│   Render    │   → Markdown report, or JSON (--format json)
 └─────────────┘
 
 (alongside Mapping: any DetectedUnit for an ecosystem ts-scan can't scan yet flows into
@@ -74,15 +74,24 @@ filed on GitHub only via the separate, explicit --file-issues review-and-confirm
   hand-transcribed) as ground truth for every `ts_scan_command` string this project generates
   or shows an LLM; see ADR-007.
 - **`interview.py`** — walks the `Candidate`s with an unresolved `open_question` and asks a
-  fixed CLI question per item.
+  fixed CLI question per item, on stderr so stdout stays reserved for the report. Its
+  non-interactive twin `apply_answers()` resolves the same questions from an `--answers` file
+  through the same code path, validating every entry first (unknown path or invalid value is an
+  error, never silently dropped). The CLI skips the interview automatically, with a warning,
+  when stdin isn't a TTY.
 - **`render.py`** — turns the finished `ScanConcept` (plus the raw `DetectedUnit` list, for the
-  CI/monorepo-marker sections) into the Markdown report. Takes a `level`
+  CI/monorepo-marker sections) into the Markdown report, or dumps the `ScanConcept` as JSON
+  (`--format json`, see ADR-010). Takes a `level`
   (`beginner`/`intermediate`/`expert`) that only ever adds or removes *prose* — it never
   changes which candidates exist or what command each one gets; see ADR-008.
 - **`llm/`** — the `LLMClient` abstraction plus concrete backends (`ollama.py` default,
   `anthropic.py` optional extra).
 - **`model.py`** — the shared data types (`DetectedUnit`, `Candidate`, `ScanConcept`) that
-  every stage above passes to the next. Internal only in v1 (not exposed as a file format yet).
+  every stage above passes to the next. Since v0.7.0 `ScanConcept` is also the `--format json`
+  output, so field renames are now a breaking change for consumers (see ADR-010).
+- **`skills/ts-scan-agent/`** - the self-contained Agent Skill: `SKILL.md`, dependency-free
+  Python and Node ports of the pipeline in `scripts/`, and `references/manual.md` for machines
+  with neither runtime. `.claude-plugin/` packages it as a plugin. See ADR-010.
 - **`settings.py`** — merges `~/.ts-scan-agent/config.toml` and a project-local
   `.ts-scan-agent.toml` (current working directory) into one dict, installed as the `analyze`
   command's Click `default_map` so it's overridden by env vars/explicit flags rather than the
@@ -187,7 +196,8 @@ not needed yet.
 additive change, not a rewrite.
 
 **Consequences:** No breaking change expected when script generation is added later; until
-then, nothing external depends on the internal `ScanConcept` shape.
+then, nothing external depends on the internal `ScanConcept` shape. (Superseded in part by
+ADR-010: `--format json` now exports `ScanConcept`, so its shape is public as of v0.7.0.)
 
 ### ADR-005 — Interview ships as a fixed CLI prompt, not a freeform LLM dialogue (v1 scope cut)
 
@@ -337,6 +347,65 @@ standard Click). The project-config-via-CWD simplification means a `.ts-scan-age
 committed to a repo is only picked up when `ts-scan-agent` is actually run from that repo's
 root — invoking it with a distant relative path from elsewhere silently misses it, which should
 be called out if it trips someone up in practice.
+
+### ADR-010 - Ship as a self-contained Agent Skill; commands pass through the agent verbatim
+
+**Date:** 2026-09-29
+
+**Context:** [Issue #1](https://github.com/TrustSource/ts-scan-agent/issues/1): a developer
+should be able to ask a coding agent (Claude Code, GitHub Copilot, Codex, ...) to "set up
+TrustSource scanning for this repo" and get a finished scan concept back. Before this, the
+agent had nothing to discover, the interview died with a bare `Aborted!` in a TTY-less agent
+shell (after writing prompts to stdout, where the report goes), answers collected in chat had
+no way back into the CLI, and the only output was prose.
+
+The first version of the skill drove this package's CLI, installed on demand with
+`uvx --from git+...@<tag>`. Dogfooding it showed the flaw: on a normal machine the skill
+stopped and asked the user to install uv or pip-install the package first. The user's
+requirement (2026-09-29): the skill must do the whole job with whatever is already on the
+machine, with no external dependencies. An MCP server was also considered and rejected: more
+to install and maintain, for the same result.
+
+**Decision:**
+- **Self-contained skill.** `skills/ts-scan-agent/` follows the [Agent Skills](https://agentskills.io)
+  spec, using only the spec's frontmatter fields so it loads the same way in Claude Code,
+  Copilot and other compatible agents. It bundles two dependency-free ports of the `--llm none`
+  pipeline (Inventory, Mapping, answers, ecosystem proposals, Render):
+  `scripts/scan_concept.py` (Python 3.8+ standard library) and `scripts/scan_concept.mjs`
+  (Node.js 18+ built-ins). The agent uses whichever runtime exists; with neither, it follows
+  `references/manual.md` using its own file tools. There is no LLM backend: the host agent
+  already is one, and ambiguous cases go to the user as open questions.
+- **Three implementations, one behavior.** This package stays the source of truth. The ports
+  replicate `ts_scan.pm.*Scanner.accepts()` (plain file checks, see ADR-003) and pathspec's
+  gitignore semantics instead of importing them. `tests/test_skill_scripts.py` runs the package
+  and both ports on the same fixtures (monorepo, gitignore, unsupported ecosystems, depth limit,
+  answers, errors) and requires byte-identical Markdown and equal JSON. To make that possible,
+  `inventory.py` now walks directories in sorted order. The manual-mode command templates are
+  checked against `mapping.py`'s output.
+- **The CLI also becomes agent-drivable:** `--answers` resolves open questions through the
+  interview's code path, from a file or inline JSON (inline, so an agent needs no temp file and
+  no extra permission prompt); `--format json` exposes `ScanConcept` (the additive change
+  ADR-004 planned); no TTY on stdin falls back to non-interactive with a stderr warning; all
+  prompts go to stderr.
+- **Verbatim-command rule.** ADR-007 guarantees the commands this tool emits are right; an
+  agent rewording them afterwards would undo that. SKILL.md tells the agent to copy every
+  `ts-scan` command verbatim, never edit or "fix" one, and to point the user at this repo's
+  issue tracker if one looks wrong.
+- **Human confirmation stays mandatory** for filing ecosystem proposals (ADR-006) and for
+  `ts-scan upload`, which sends data to TrustSource. The skill's `allowed-tools` pre-approves
+  only the bundled script's `analyze` command.
+- **Distribution:** copying the folder is the primary install (per repo, e.g. `.github/skills/`,
+  or per user). `.claude-plugin/plugin.json` and `marketplace.json` (marketplace `trustsource`)
+  additionally package it as a Claude Code plugin; Copilot CLI reads the same marketplace file.
+  Tests keep the SKILL.md, script and `plugin.json` versions equal to `pyproject.toml`, and
+  check that every flag SKILL.md uses exists on the script.
+
+**Consequences:** Every change to detection rules, classification or report wording now has to
+land in three places (package, Python port, Node port), and in `references/manual.md` when it
+changes the rules. The parity tests make forgetting one a CI failure rather than silent drift,
+but it is real extra work per change. Manual mode is best-effort: it follows the same rules,
+but nothing tests an agent's hand-made report. `ScanConcept`'s field names are now a public
+contract for `--format json` consumers.
 
 ---
 
