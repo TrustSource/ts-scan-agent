@@ -23,7 +23,7 @@ jobs:
       # tests/test_skill_scripts.py also runs the skill's Node port against the package.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: pip install -e . pytest
       - run: pytest -q
 
